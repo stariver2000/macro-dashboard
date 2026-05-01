@@ -34,6 +34,7 @@ export default function Dashboard() {
 
   const [showModal, setShowModal] = useState(false);
   const [containerWidth, setContainerWidth] = useState(1200);
+  const [isMobile, setIsMobile] = useState(false);
 
   // localStorage에서 저장된 상태 복원 (클라이언트 전용)
   useEffect(() => {
@@ -53,10 +54,13 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (!mounted) return;
-    const updateWidth = () => setContainerWidth(window.innerWidth - 48);
-    updateWidth();
-    window.addEventListener("resize", updateWidth);
-    return () => window.removeEventListener("resize", updateWidth);
+    const update = () => {
+      setContainerWidth(window.innerWidth - 48);
+      setIsMobile(window.innerWidth < 768);
+    };
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
   }, [mounted]);
 
   const saveLayout = useCallback((newLayout: Layout) => {
@@ -108,18 +112,20 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-gray-950 text-white">
       {/* 네비 */}
-      <header className="sticky top-0 z-40 bg-gray-950/90 backdrop-blur border-b border-gray-800 px-6 py-3 flex items-center justify-between">
+      <header className="sticky top-0 z-40 bg-gray-950/90 backdrop-blur border-b border-gray-800 px-4 py-3 flex items-center justify-between">
         <div>
-          <h1 className="text-lg font-bold tracking-tight">Macro Dashboard</h1>
-          <p className="text-xs text-gray-500">드래그로 위젯 배치 · 우상단 × 로 제거</p>
+          <h1 className="text-base font-bold tracking-tight">Macro Dashboard</h1>
+          {!isMobile && <p className="text-xs text-gray-500">드래그로 위젯 배치 · 우상단 × 로 제거</p>}
         </div>
         <div className="flex gap-2">
-          <button
-            onClick={resetLayout}
-            className="text-xs text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 px-3 py-1.5 rounded-lg transition-colors"
-          >
-            레이아웃 초기화
-          </button>
+          {!isMobile && (
+            <button
+              onClick={resetLayout}
+              className="text-xs text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 px-3 py-1.5 rounded-lg transition-colors"
+            >
+              레이아웃 초기화
+            </button>
+          )}
           <button
             onClick={() => setShowModal(true)}
             className="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg transition-colors font-medium"
@@ -130,7 +136,7 @@ export default function Dashboard() {
       </header>
 
       {/* 그리드 */}
-      <main className="p-6">
+      <main className={isMobile ? "p-3" : "p-6"}>
         {indicators.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-96 gap-4">
             <p className="text-gray-500">표시할 지표가 없습니다.</p>
@@ -141,7 +147,29 @@ export default function Dashboard() {
               지표 추가하기
             </button>
           </div>
+        ) : isMobile ? (
+          /* 모바일: 1열 스택 레이아웃 */
+          <div className="flex flex-col gap-3">
+            {indicators.map((ind) => (
+              <div
+                key={ind.id}
+                className="bg-gray-900 border border-gray-800 rounded-xl p-3 flex flex-col"
+                style={{ height: 240 }}
+              >
+                <div className="flex items-center justify-end mb-1 flex-shrink-0">
+                  <button
+                    onClick={() => removeIndicator(ind.id)}
+                    className="text-gray-600 hover:text-gray-300 text-lg leading-none transition-colors"
+                  >
+                    ×
+                  </button>
+                </div>
+                <IndicatorChart indicator={ind} />
+              </div>
+            ))}
+          </div>
         ) : (
+          /* 데스크탑: 드래그앤드롭 그리드 */
           <GridLayout
             layout={layout}
             gridConfig={{ cols: COLS, rowHeight: ROW_HEIGHT }}
@@ -155,7 +183,6 @@ export default function Dashboard() {
                 key={ind.id}
                 className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex flex-col overflow-hidden"
               >
-                {/* 드래그 핸들 + 삭제 */}
                 <div className="drag-handle flex items-center justify-between cursor-grab active:cursor-grabbing mb-1 flex-shrink-0">
                   <div className="flex gap-0.5">
                     {[0, 1, 2].map((i) => (
