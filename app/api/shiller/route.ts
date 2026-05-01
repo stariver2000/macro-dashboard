@@ -24,7 +24,7 @@ function decimalDateToString(d: number): string {
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const key = searchParams.get("key") ?? "cape";
-  const limit = parseInt(searchParams.get("limit") ?? "260", 10);
+  const start = searchParams.get("start"); // YYYY-MM-DD
 
   try {
     const res = await fetch(SHILLER_URL, { next: { revalidate: 86400 } }); // 24h 캐시
@@ -48,7 +48,7 @@ export async function GET(req: NextRequest) {
         return { date: dateStr, value: parseFloat(String(row[key])) };
       })
       .filter((o) => !isNaN(o.value))
-      .slice(-limit); // 최신 N개
+      .filter((o) => !start || o.date >= start);
 
     return NextResponse.json({ observations });
   } catch (err) {

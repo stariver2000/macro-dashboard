@@ -24,40 +24,46 @@ interface Observation {
   value: number;
 }
 
-function fetchFred(series: string, limit: number) {
-  return fetch(`/api/fred?series=${series}&limit=${limit}`).then((r) => {
+function startDateOf(years: number): string {
+  const d = new Date();
+  d.setFullYear(d.getFullYear() - years);
+  return d.toISOString().slice(0, 10);
+}
+
+function fetchFred(series: string, start: string) {
+  return fetch(`/api/fred?series=${series}&start=${start}`).then((r) => {
     if (!r.ok) throw new Error("API error");
     return r.json() as Promise<{ observations: Observation[] }>;
   });
 }
 
-function fetchShiller(key: string, limit: number) {
-  return fetch(`/api/shiller?key=${key}&limit=${limit}`).then((r) => {
+function fetchShiller(key: string, start: string) {
+  return fetch(`/api/shiller?key=${key}&start=${start}`).then((r) => {
     if (!r.ok) throw new Error("API error");
     return r.json() as Promise<{ observations: Observation[] }>;
   });
 }
 
 const PERIOD_OPTIONS = [
-  { label: "1Y", value: 52 },
-  { label: "3Y", value: 156 },
-  { label: "5Y", value: 260 },
-  { label: "10Y", value: 520 },
-  { label: "20Y", value: 1040 },
+  { label: "1Y", years: 1 },
+  { label: "3Y", years: 3 },
+  { label: "5Y", years: 5 },
+  { label: "10Y", years: 10 },
+  { label: "20Y", years: 20 },
 ];
 
 export default function IndicatorChart({ indicator }: Props) {
   const [periodIdx, setPeriodIdx] = React.useState(2); // 기본 5Y
-  const limit = PERIOD_OPTIONS[periodIdx].value;
+  const start = startDateOf(PERIOD_OPTIONS[periodIdx].years);
 
   const isShiller = !!indicator.shillerKey;
   const { data, isLoading, isError } = useQuery({
     queryKey: isShiller
-      ? ["shiller", indicator.shillerKey, limit]
-      : ["fred", indicator.fredSeries, limit],
+      ? ["shiller", indicator.shillerKey, start]
+      : ["fred", indicator.fredSeries, start],
     queryFn: isShiller
-      ? () => fetchShiller(indicator.shillerKey!, limit)
-      : () => fetchFred(indicator.fredSeries!, limit),
+      ? () => fetchShiller(indicator.shillerKey!, start)
+      : () => fetchFred(indicator.fredSeries!, start),
     enabled: isShiller ? !!indicator.shillerKey : !!indicator.fredSeries,
   });
 
