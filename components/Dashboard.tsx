@@ -109,6 +109,14 @@ export default function Dashboard() {
     .map((id) => AVAILABLE_INDICATORS.find((ind) => ind.id === id))
     .filter(Boolean) as typeof AVAILABLE_INDICATORS;
 
+  if (!mounted) {
+    return (
+      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+        <div className="text-gray-600 text-sm">로딩 중...</div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-950 text-white">
       {/* 네비 */}
