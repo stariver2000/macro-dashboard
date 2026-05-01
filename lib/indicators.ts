@@ -6,6 +6,7 @@ export interface Indicator {
   description: string;
   fredSeries?: string;    // FRED series ID
   shillerKey?: string;    // Shiller dataset field name (e.g. "cape")
+  yahooSymbol?: string;   // Yahoo Finance ticker (e.g. "HG=F")
   unit: string;
   category: "market" | "credit" | "macro" | "commodity";
   chartType: ChartType;
@@ -106,10 +107,10 @@ export const AVAILABLE_INDICATORS: Indicator[] = [
   },
   {
     id: "copper",
-    name: "구리 가격",
-    description: "글로벌 경기 선행 지표 - 구리 현물가격",
-    fredSeries: "PCOPPUSDM",
-    unit: "USD/MT",
+    name: "구리 가격 (선물)",
+    description: "글로벌 경기 선행 지표 - 구리 선물 (HG=F, 일별)",
+    yahooSymbol: "HG=F",
+    unit: "USD/lb",
     category: "commodity",
     chartType: "line",
     color: "#b45309",

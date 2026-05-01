@@ -44,6 +44,13 @@ function fetchShiller(key: string, start: string) {
   });
 }
 
+function fetchYahoo(symbol: string, start: string) {
+  return fetch(`/api/yahoo?symbol=${encodeURIComponent(symbol)}&start=${start}`).then((r) => {
+    if (!r.ok) throw new Error("API error");
+    return r.json() as Promise<{ observations: Observation[] }>;
+  });
+}
+
 const PERIOD_OPTIONS = [
   { label: "1Y", years: 1 },
   { label: "3Y", years: 3 },
@@ -56,15 +63,16 @@ export default function IndicatorChart({ indicator }: Props) {
   const [periodIdx, setPeriodIdx] = React.useState(2); // 기본 5Y
   const start = startDateOf(PERIOD_OPTIONS[periodIdx].years);
 
-  const isShiller = !!indicator.shillerKey;
+  const source = indicator.yahooSymbol ? "yahoo" : indicator.shillerKey ? "shiller" : "fred";
   const { data, isLoading, isError } = useQuery({
-    queryKey: isShiller
-      ? ["shiller", indicator.shillerKey, start]
-      : ["fred", indicator.fredSeries, start],
-    queryFn: isShiller
-      ? () => fetchShiller(indicator.shillerKey!, start)
-      : () => fetchFred(indicator.fredSeries!, start),
-    enabled: isShiller ? !!indicator.shillerKey : !!indicator.fredSeries,
+    queryKey: [source, indicator.yahooSymbol ?? indicator.shillerKey ?? indicator.fredSeries, start],
+    queryFn:
+      source === "yahoo"
+        ? () => fetchYahoo(indicator.yahooSymbol!, start)
+        : source === "shiller"
+        ? () => fetchShiller(indicator.shillerKey!, start)
+        : () => fetchFred(indicator.fredSeries!, start),
+    enabled: !!(indicator.yahooSymbol ?? indicator.shillerKey ?? indicator.fredSeries),
   });
 
   const observations = data?.observations ?? [];
