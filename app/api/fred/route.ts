@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 
+function downsample<T>(arr: T[], max: number): T[] {
+  if (arr.length <= max) return arr;
+  const step = arr.length / max;
+  return Array.from({ length: max }, (_, i) => arr[Math.round(i * step)]);
+}
+
 const FRED_BASE = "https://api.stlouisfed.org/fred/series/observations";
 
 export async function GET(req: NextRequest) {
@@ -35,7 +41,7 @@ export async function GET(req: NextRequest) {
         value: parseFloat(o.value),
       }));
 
-    return NextResponse.json({ observations });
+    return NextResponse.json({ observations: downsample(observations, 1200) });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });

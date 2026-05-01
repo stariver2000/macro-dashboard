@@ -52,15 +52,16 @@ function fetchYahoo(symbol: string, start: string) {
 }
 
 const PERIOD_OPTIONS = [
-  { label: "1Y", years: 1 },
-  { label: "3Y", years: 3 },
-  { label: "5Y", years: 5 },
+  { label: "1Y",  years: 1  },
+  { label: "3Y",  years: 3  },
+  { label: "5Y",  years: 5  },
   { label: "10Y", years: 10 },
   { label: "20Y", years: 20 },
+  { label: "50Y", years: 50 },
 ];
 
 export default function IndicatorChart({ indicator }: Props) {
-  const [periodIdx, setPeriodIdx] = React.useState(2); // 기본 5Y
+  const [periodIdx, setPeriodIdx] = React.useState(5); // 기본 50Y
   const start = startDateOf(PERIOD_OPTIONS[periodIdx].years);
 
   const source = indicator.yahooSymbol ? "yahoo" : indicator.shillerKey ? "shiller" : "fred";

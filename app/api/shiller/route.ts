@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 
+function downsample<T>(arr: T[], max: number): T[] {
+  if (arr.length <= max) return arr;
+  const step = arr.length / max;
+  return Array.from({ length: max }, (_, i) => arr[Math.round(i * step)]);
+}
+
 const SHILLER_URL =
   "https://posix4e.github.io/shiller_wrapper_data/data/stock_market_data.json";
 
@@ -50,7 +56,7 @@ export async function GET(req: NextRequest) {
       .filter((o) => !isNaN(o.value))
       .filter((o) => !start || o.date >= start);
 
-    return NextResponse.json({ observations });
+    return NextResponse.json({ observations: downsample(observations, 1200) });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });

@@ -135,6 +135,26 @@ export const AVAILABLE_INDICATORS: Indicator[] = [
     chartType: "area",
     color: "#dc2626",
   },
+  {
+    id: "gold",
+    name: "금 가격 (선물)",
+    description: "금 선물 가격 (GC=F, 일별)",
+    yahooSymbol: "GC=F",
+    unit: "USD/oz",
+    category: "commodity",
+    chartType: "line",
+    color: "#eab308",
+  },
+  {
+    id: "oil_wti",
+    name: "WTI 원유 (선물)",
+    description: "서부텍사스산 원유 선물 가격 (CL=F, 일별)",
+    yahooSymbol: "CL=F",
+    unit: "USD/bbl",
+    category: "commodity",
+    chartType: "line",
+    color: "#64748b",
+  },
 ];
 
 export const CATEGORY_LABELS: Record<Indicator["category"], string> = {

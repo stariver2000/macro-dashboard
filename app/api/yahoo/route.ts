@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 
+function downsample<T>(arr: T[], max: number): T[] {
+  if (arr.length <= max) return arr;
+  const step = arr.length / max;
+  return Array.from({ length: max }, (_, i) => arr[Math.round(i * step)]);
+}
+
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const symbol = searchParams.get("symbol");
@@ -30,12 +36,15 @@ export async function GET(req: NextRequest) {
     const timestamps: number[] = result.timestamp ?? [];
     const closes: (number | null)[] = result.indicators?.quote?.[0]?.close ?? [];
 
-    const observations = timestamps
+    const all = timestamps
       .map((ts, i) => ({
         date: new Date(ts * 1000).toISOString().slice(0, 10),
         value: closes[i],
       }))
       .filter((o): o is { date: string; value: number } => o.value != null && !isNaN(o.value));
+
+    // 최대 1200포인트로 다운샘플링 (50년치 일별 ≈ 12500개 → 렌더 성능 확보)
+    const observations = downsample(all, 1200);
 
     return NextResponse.json({ observations });
   } catch (err) {
