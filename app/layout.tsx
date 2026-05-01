@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Providers from "@/components/Providers";
@@ -11,6 +11,11 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Macro Dashboard",
   description: "커스터마이즈 가능한 거시경제 지표 대시보드",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
 };
 
 export default function RootLayout({
