@@ -104,6 +104,7 @@ export default function IndicatorChart({ indicator }: Props) {
       : observations;
 
   // 터치 X 좌표 → 가장 가까운 데이터 포인트
+  // chartData(합성 오늘 포인트 포함)로 픽셀 매핑 후, 실제 observations 범위로 제한
   const findNearestPoint = useCallback(
     (clientX: number) => {
       if (!chartRef.current || chartData.length === 0) return;
@@ -112,9 +113,11 @@ export default function IndicatorChart({ indicator }: Props) {
       const relX = clientX - rect.left - Y_AXIS_WIDTH;
       const ratio = Math.max(0, Math.min(relX / chartAreaWidth, 1));
       const idx = Math.round(ratio * (chartData.length - 1));
-      setActivePoint(chartData[Math.max(0, Math.min(idx, chartData.length - 1))]);
+      // 합성 오늘 포인트(마지막)가 선택되지 않도록 실제 데이터 범위로 제한
+      const realIdx = Math.min(idx, observations.length - 1);
+      setActivePoint(observations[Math.max(0, realIdx)]);
     },
-    [chartData]
+    [chartData, observations]
   );
 
   // passive:false 터치무브 리스너 (스크롤 막으면서 드래그 탐색)
