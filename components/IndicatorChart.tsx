@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   LineChart, Line,
   AreaChart, Area,
@@ -63,10 +63,18 @@ const PERIOD_OPTIONS = [
   { label: "50Y", years: 50 },
 ];
 
+const CHART_MARGIN = { top: 4, right: 8, left: 0, bottom: 0 };
+const Y_AXIS_WIDTH = 45;
+const LONG_PRESS_MS = 350;
+
 export default function IndicatorChart({ indicator }: Props) {
   const [periodIdx, setPeriodIdx] = React.useState(5);
   const [isMobile, setIsMobile] = useState(false);
   const [activePoint, setActivePoint] = useState<Observation | null>(null);
+
+  const chartRef = useRef<HTMLDivElement>(null);
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isLongPress = useRef(false);
 
   useEffect(() => {
     setIsMobile(window.innerWidth < 768);
@@ -89,19 +97,63 @@ export default function IndicatorChart({ indicator }: Props) {
   const observations = data?.observations ?? [];
   const latest = observations[observations.length - 1];
 
-  // x축을 항상 오늘까지 연장
   const today = new Date().toISOString().slice(0, 10);
   const chartData =
     observations.length > 0 && observations[observations.length - 1].date < today
       ? [...observations, { date: today, value: observations[observations.length - 1].value }]
       : observations;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const handleChartMove = useCallback((data: any) => {
-    const payload = data?.activePayload?.[0]?.payload as Observation | undefined;
-    if (payload) setActivePoint(payload);
+  // 터치 X 좌표 → 가장 가까운 데이터 포인트
+  const findNearestPoint = useCallback(
+    (clientX: number) => {
+      if (!chartRef.current || chartData.length === 0) return;
+      const rect = chartRef.current.getBoundingClientRect();
+      const chartAreaWidth = rect.width - Y_AXIS_WIDTH - CHART_MARGIN.right;
+      const relX = clientX - rect.left - Y_AXIS_WIDTH;
+      const ratio = Math.max(0, Math.min(relX / chartAreaWidth, 1));
+      const idx = Math.round(ratio * (chartData.length - 1));
+      setActivePoint(chartData[Math.max(0, Math.min(idx, chartData.length - 1))]);
+    },
+    [chartData]
+  );
+
+  // passive:false 터치무브 리스너 (스크롤 막으면서 드래그 탐색)
+  useEffect(() => {
+    const el = chartRef.current;
+    if (!el || !isMobile) return;
+    const onMove = (e: TouchEvent) => {
+      if (!isLongPress.current) return;
+      e.preventDefault();
+      findNearestPoint(e.touches[0].clientX);
+    };
+    el.addEventListener("touchmove", onMove, { passive: false });
+    return () => el.removeEventListener("touchmove", onMove);
+  }, [isMobile, findNearestPoint]);
+
+  const handleTouchStart = useCallback(
+    (e: React.TouchEvent) => {
+      const clientX = e.touches[0].clientX;
+      longPressTimer.current = setTimeout(() => {
+        isLongPress.current = true;
+        findNearestPoint(clientX);
+      }, LONG_PRESS_MS);
+    },
+    [findNearestPoint]
+  );
+
+  const handleTouchEnd = useCallback(() => {
+    if (longPressTimer.current) clearTimeout(longPressTimer.current);
+    longPressTimer.current = null;
+    isLongPress.current = false;
+    setActivePoint(null);
   }, []);
 
+  // 데스크탑 hover 핸들러
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const handleChartMove = useCallback((d: any) => {
+    const payload = d?.activePayload?.[0]?.payload as Observation | undefined;
+    if (payload) setActivePoint(payload);
+  }, []);
   const handleChartLeave = useCallback(() => setActivePoint(null), []);
 
   const fmtDate = (d: string) => {
@@ -111,9 +163,8 @@ export default function IndicatorChart({ indicator }: Props) {
 
   const sharedProps = {
     data: chartData,
-    margin: { top: 4, right: 8, left: 0, bottom: 0 },
-    onMouseMove: handleChartMove,
-    onMouseLeave: handleChartLeave,
+    margin: CHART_MARGIN,
+    ...(isMobile ? {} : { onMouseMove: handleChartMove, onMouseLeave: handleChartLeave }),
   };
 
   const tooltipEl = isMobile ? null : (
@@ -145,7 +196,7 @@ export default function IndicatorChart({ indicator }: Props) {
         tick={{ fontSize: 10, fill: "#9ca3af" }}
         tickLine={false}
         axisLine={false}
-        width={45}
+        width={Y_AXIS_WIDTH}
       />
       {tooltipEl}
     </>
@@ -213,9 +264,7 @@ export default function IndicatorChart({ indicator }: Props) {
               <span className="text-xs font-normal text-gray-400 ml-1">{indicator.unit}</span>
             </p>
           )}
-          {latest && (
-            <p className="text-xs text-gray-500">{formatDateKorean(latest.date)}</p>
-          )}
+          {latest && <p className="text-xs text-gray-500">{formatDateKorean(latest.date)}</p>}
         </div>
         <div className="flex gap-1 flex-shrink-0">
           {PERIOD_OPTIONS.map((p, i) => (
@@ -223,9 +272,7 @@ export default function IndicatorChart({ indicator }: Props) {
               key={p.label}
               onClick={() => setPeriodIdx(i)}
               className={`text-xs px-1.5 py-0.5 rounded ${
-                i === periodIdx
-                  ? "bg-gray-600 text-white"
-                  : "text-gray-500 hover:text-gray-300"
+                i === periodIdx ? "bg-gray-600 text-white" : "text-gray-500 hover:text-gray-300"
               }`}
             >
               {p.label}
@@ -235,15 +282,17 @@ export default function IndicatorChart({ indicator }: Props) {
       </div>
 
       {/* 차트 */}
-      <div className="flex-1 min-h-0 [&_svg]:outline-none [&_*:focus]:outline-none">
+      <div
+        ref={chartRef}
+        className="flex-1 min-h-0 [&_svg]:outline-none [&_*:focus]:outline-none"
+        {...(isMobile
+          ? { onTouchStart: handleTouchStart, onTouchEnd: handleTouchEnd }
+          : {})}
+      >
         {isLoading ? (
-          <div className="flex items-center justify-center h-full text-gray-500 text-sm">
-            로딩 중...
-          </div>
+          <div className="flex items-center justify-center h-full text-gray-500 text-sm">로딩 중...</div>
         ) : isError ? (
-          <div className="flex items-center justify-center h-full text-red-400 text-sm">
-            데이터 로드 실패
-          </div>
+          <div className="flex items-center justify-center h-full text-red-400 text-sm">데이터 로드 실패</div>
         ) : (
           <ResponsiveContainer width="100%" height="100%">
             {renderChart()}
@@ -251,7 +300,7 @@ export default function IndicatorChart({ indicator }: Props) {
         )}
       </div>
 
-      {/* 모바일: 꾹 누르면 하단에 수치 표시 */}
+      {/* 모바일: 꾹 누르고 드래그하면 하단에 수치 표시 */}
       {isMobile && (
         <div className="flex-shrink-0 h-5 mt-1 flex items-center justify-center text-xs text-gray-400">
           {activePoint
