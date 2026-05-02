@@ -145,7 +145,7 @@ export default function IndicatorChart({ indicator }: Props) {
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
     longPressTimer.current = null;
     isLongPress.current = false;
-    setActivePoint(null);
+    // activePoint 유지 (손 뗀 후에도 마지막 위치 표시)
   }, []);
 
   // 데스크탑 hover 핸들러
@@ -202,6 +202,12 @@ export default function IndicatorChart({ indicator }: Props) {
     </>
   );
 
+  // 모바일: 눌린 시점에 흰색 세로선
+  const mobileCursor =
+    isMobile && activePoint ? (
+      <ReferenceLine x={activePoint.date} stroke="rgba(255,255,255,0.45)" strokeWidth={1} />
+    ) : null;
+
   const renderChart = () => {
     if (indicator.chartType === "area") {
       return (
@@ -214,6 +220,7 @@ export default function IndicatorChart({ indicator }: Props) {
           </defs>
           {axis}
           <ReferenceLine y={0} stroke="#374151" strokeDasharray="3 3" />
+          {mobileCursor}
           <Area
             type="monotone"
             dataKey="value"
@@ -232,6 +239,7 @@ export default function IndicatorChart({ indicator }: Props) {
         <BarChart {...sharedProps}>
           {axis}
           <ReferenceLine y={0} stroke="#374151" />
+          {mobileCursor}
           <Bar dataKey="value" fill={indicator.color} radius={[2, 2, 0, 0]} isAnimationActive={false} activeBar={false} />
         </BarChart>
       );
@@ -239,6 +247,7 @@ export default function IndicatorChart({ indicator }: Props) {
     return (
       <LineChart {...sharedProps}>
         {axis}
+        {mobileCursor}
         <Line
           type="monotone"
           dataKey="value"

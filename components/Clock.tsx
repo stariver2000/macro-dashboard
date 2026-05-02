@@ -37,14 +37,15 @@ export default function Clock() {
 
   return (
     <div className="text-right text-xs leading-5">
-      <div>
+      <div className="flex items-center justify-end gap-1">
         <span className="font-mono text-white">{kst.hour}:{kst.minute}:{kst.second}</span>
-        <span className="text-gray-500 ml-1">KST</span>
-        <span className="text-gray-600 mx-2">·</span>
+        <span className="text-gray-600">{kst.year}-{kst.month}-{kst.day}</span>
+        <span className="text-gray-500">KST</span>
+        <span className="text-gray-700 mx-1">·</span>
         <span className="font-mono text-gray-300">{et.hour}:{et.minute}:{et.second}</span>
-        <span className="text-gray-500 ml-1">{etLabel}</span>
+        <span className="text-gray-600">{et.year}-{et.month}-{et.day}</span>
+        <span className="text-gray-500">{etLabel}</span>
       </div>
-      <div className="text-gray-600">{kst.year}-{kst.month}-{kst.day}</div>
     </div>
   );
 }
