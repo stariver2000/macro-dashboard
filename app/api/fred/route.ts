@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
     url.searchParams.set("sort_order", "asc");
     if (start) url.searchParams.set("observation_start", start);
 
-    const res = await fetch(url.toString(), { next: { revalidate: 3600 } }); // 1시간 캐시
+    const res = await fetch(url.toString(), { next: { revalidate: 86400, tags: ["macro-data"] } }); // 24시간 캐시
     if (!res.ok) throw new Error(`FRED API error: ${res.status}`);
 
     const data = await res.json();

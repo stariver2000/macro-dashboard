@@ -9,18 +9,35 @@ import IndicatorChart from "./IndicatorChart";
 import AddIndicatorModal from "./AddIndicatorModal";
 
 const COLS = 12;
+const ITEM_W = 4;
+const ITEM_H = 7;
+const COLS_PER_ROW = COLS / ITEM_W; // 3
 const ROW_HEIGHT = 30;
 
 function makeDefaultLayout(ids: string[]): LayoutItem[] {
   return ids.map((id, i) => ({
     i: id,
-    x: (i % 3) * 4,
-    y: Math.floor(i / 3) * 7,
-    w: 4,
-    h: 7,
+    x: (i % COLS_PER_ROW) * ITEM_W,
+    y: Math.floor(i / COLS_PER_ROW) * ITEM_H,
+    w: ITEM_W,
+    h: ITEM_H,
     minW: 3,
     minH: 5,
   }));
+}
+
+/** 현재 레이아웃에서 다음 슬롯 위치를 계산 (행 우선 순서) */
+function nextSlot(layout: LayoutItem[]): { x: number; y: number } {
+  if (layout.length === 0) return { x: 0, y: 0 };
+  const maxY = Math.max(...layout.map((l) => l.y));
+  const itemsInLastRow = layout.filter((l) => l.y === maxY);
+  if (itemsInLastRow.length < COLS_PER_ROW) {
+    const usedXs = new Set(itemsInLastRow.map((l) => l.x));
+    for (let x = 0; x < COLS; x += ITEM_W) {
+      if (!usedXs.has(x)) return { x, y: maxY };
+    }
+  }
+  return { x: 0, y: Math.max(...layout.map((l) => l.y + l.h)) };
 }
 
 const STORAGE_KEY = "macro-dashboard-layout";
@@ -34,7 +51,6 @@ export default function Dashboard() {
 
   const [showModal, setShowModal] = useState(false);
   const [containerWidth, setContainerWidth] = useState(1200);
-  const [isMobile, setIsMobile] = useState(false);
 
   // localStorage에서 저장된 상태 복원 (클라이언트 전용)
   useEffect(() => {
@@ -54,10 +70,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (!mounted) return;
-    const update = () => {
-      setContainerWidth(window.innerWidth - 48);
-      setIsMobile(window.innerWidth < 768);
-    };
+    const update = () => setContainerWidth(window.innerWidth - 48);
     update();
     window.addEventListener("resize", update);
     return () => window.removeEventListener("resize", update);
@@ -75,10 +88,10 @@ export default function Dashboard() {
       setIndicatorIds(newIds);
       localStorage.setItem(STORAGE_IDS_KEY, JSON.stringify(newIds));
 
-      const maxY = layout.reduce((m, l) => Math.max(m, l.y + l.h), 0);
+      const { x, y } = nextSlot(layout);
       const newLayout: LayoutItem[] = [
         ...layout,
-        { i: id, x: 0, y: maxY, w: 4, h: 7, minW: 3, minH: 5 },
+        { i: id, x, y, w: ITEM_W, h: ITEM_H, minW: 3, minH: 5 },
       ];
       setLayout(newLayout);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(newLayout));
@@ -123,17 +136,15 @@ export default function Dashboard() {
       <header className="sticky top-0 z-40 bg-gray-950/90 backdrop-blur border-b border-gray-800 px-4 py-3 flex items-center justify-between">
         <div>
           <h1 className="text-base font-bold tracking-tight">Macro Dashboard</h1>
-          {!isMobile && <p className="text-xs text-gray-500">드래그로 위젯 배치 · 우상단 × 로 제거</p>}
+          <p className="text-xs text-gray-500">드래그로 위젯 배치 · 우상단 × 로 제거</p>
         </div>
         <div className="flex gap-2">
-          {!isMobile && (
-            <button
-              onClick={resetLayout}
-              className="text-xs text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 px-3 py-1.5 rounded-lg transition-colors"
-            >
-              레이아웃 초기화
-            </button>
-          )}
+          <button
+            onClick={resetLayout}
+            className="text-xs text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 px-3 py-1.5 rounded-lg transition-colors"
+          >
+            레이아웃 초기화
+          </button>
           <button
             onClick={() => setShowModal(true)}
             className="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg transition-colors font-medium"
@@ -144,7 +155,7 @@ export default function Dashboard() {
       </header>
 
       {/* 그리드 */}
-      <main className={isMobile ? "p-3" : "p-6"}>
+      <main className="p-6">
         {indicators.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-96 gap-4">
             <p className="text-gray-500">표시할 지표가 없습니다.</p>
@@ -155,29 +166,8 @@ export default function Dashboard() {
               지표 추가하기
             </button>
           </div>
-        ) : isMobile ? (
-          /* 모바일: 1열 스택 레이아웃 */
-          <div className="flex flex-col gap-3">
-            {indicators.map((ind) => (
-              <div
-                key={ind.id}
-                className="bg-gray-900 border border-gray-800 rounded-xl p-3 flex flex-col"
-                style={{ height: 240 }}
-              >
-                <div className="flex items-center justify-end mb-1 flex-shrink-0">
-                  <button
-                    onClick={() => removeIndicator(ind.id)}
-                    className="text-gray-600 hover:text-gray-300 text-lg leading-none transition-colors"
-                  >
-                    ×
-                  </button>
-                </div>
-                <IndicatorChart indicator={ind} />
-              </div>
-            ))}
-          </div>
         ) : (
-          /* 데스크탑: 드래그앤드롭 그리드 */
+          /* 드래그앤드롭 그리드: 행 우선으로 슬롯이 채워짐 */
           <GridLayout
             layout={layout}
             gridConfig={{ cols: COLS, rowHeight: ROW_HEIGHT }}

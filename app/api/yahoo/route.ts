@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
   try {
     const res = await fetch(url, {
       headers: { "User-Agent": "Mozilla/5.0" },
-      next: { revalidate: 3600 }, // 1시간 캐시
+      next: { revalidate: 86400, tags: ["macro-data"] }, // 24시간 캐시
     });
     if (!res.ok) throw new Error(`Yahoo Finance error: ${res.status}`);
 

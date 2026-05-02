@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
   const start = searchParams.get("start"); // YYYY-MM-DD
 
   try {
-    const res = await fetch(SHILLER_URL, { next: { revalidate: 86400 } }); // 24h 캐시
+    const res = await fetch(SHILLER_URL, { next: { revalidate: 86400, tags: ["macro-data"] } }); // 24h 캐시
     if (!res.ok) throw new Error(`Shiller fetch error: ${res.status}`);
 
     const json = await res.json();

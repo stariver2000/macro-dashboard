@@ -79,6 +79,13 @@ export default function IndicatorChart({ indicator }: Props) {
   const observations = data?.observations ?? [];
   const latest = observations[observations.length - 1];
 
+  // x축을 항상 오늘 날짜까지 연장 (마지막 데이터가 오래됐어도 오늘까지 표시)
+  const today = new Date().toISOString().slice(0, 10);
+  const chartData =
+    observations.length > 0 && observations[observations.length - 1].date < today
+      ? [...observations, { date: today, value: observations[observations.length - 1].value }]
+      : observations;
+
   // x축 날짜 포맷 (데이터 간격에 따라)
   const fmtDate = (d: string) => {
     const dt = new Date(d);
@@ -86,7 +93,7 @@ export default function IndicatorChart({ indicator }: Props) {
   };
 
   const sharedProps = {
-    data: observations,
+    data: chartData,
     margin: { top: 4, right: 8, left: 0, bottom: 0 },
   };
 
