@@ -52,6 +52,8 @@ export default function Dashboard() {
 
   const [showModal, setShowModal] = useState(false);
   const [containerWidth, setContainerWidth] = useState(1200);
+  const [syncMode, setSyncMode] = useState(false);
+  const [syncDate, setSyncDate] = useState<string | null>(null);
 
   // localStorage에서 저장된 상태 복원 (클라이언트 전용)
   useEffect(() => {
@@ -76,6 +78,30 @@ export default function Dashboard() {
     window.addEventListener("resize", update);
     return () => window.removeEventListener("resize", update);
   }, [mounted]);
+
+  const handleSyncDate = useCallback((date: string | null) => {
+    setSyncDate(date);
+  }, []);
+
+  const toggleSync = useCallback(() => {
+    if (!syncMode) {
+      if (!indicatorIds.includes("sp500")) {
+        const newIds = ["sp500", ...indicatorIds];
+        setIndicatorIds(newIds);
+        localStorage.setItem(STORAGE_IDS_KEY, JSON.stringify(newIds));
+
+        const sp500Item: LayoutItem = { i: "sp500", x: 0, y: 0, w: ITEM_W, h: ITEM_H, minW: 3, minH: 5 };
+        const shifted = layout.map((item) => ({ ...item, y: item.y + ITEM_H }));
+        const newLayout = [sp500Item, ...shifted];
+        setLayout(newLayout);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(newLayout));
+      }
+      setSyncMode(true);
+    } else {
+      setSyncMode(false);
+      setSyncDate(null);
+    }
+  }, [syncMode, indicatorIds, layout]);
 
   const saveLayout = useCallback((newLayout: Layout) => {
     const mutable = [...newLayout] as LayoutItem[];
@@ -103,6 +129,10 @@ export default function Dashboard() {
 
   const removeIndicator = useCallback(
     (id: string) => {
+      if (id === "sp500") {
+        setSyncMode(false);
+        setSyncDate(null);
+      }
       const newIds = indicatorIds.filter((i) => i !== id);
       const newLayout = layout.filter((l) => l.i !== id);
       setIndicatorIds(newIds);
@@ -112,12 +142,6 @@ export default function Dashboard() {
     },
     [indicatorIds, layout]
   );
-
-  const resetLayout = useCallback(() => {
-    const defaultLayout = makeDefaultLayout(indicatorIds);
-    setLayout(defaultLayout);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(defaultLayout));
-  }, [indicatorIds]);
 
   const indicators = indicatorIds
     .map((id) => AVAILABLE_INDICATORS.find((ind) => ind.id === id))
@@ -143,10 +167,14 @@ export default function Dashboard() {
           <Clock />
           <div className="flex gap-2">
             <button
-              onClick={resetLayout}
-              className="text-xs text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 px-3 py-1.5 rounded-lg transition-colors"
+              onClick={toggleSync}
+              className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${
+                syncMode
+                  ? "bg-emerald-700 border-emerald-600 text-white"
+                  : "text-gray-400 hover:text-white border-gray-700 hover:border-gray-500"
+              }`}
             >
-              레이아웃 초기화
+              {syncMode ? "S&P 동기화 ON" : "S&P 동기화"}
             </button>
             <button
               onClick={() => setShowModal(true)}
@@ -199,7 +227,12 @@ export default function Dashboard() {
                     ×
                   </button>
                 </div>
-                <IndicatorChart indicator={ind} />
+                <IndicatorChart
+                  indicator={ind}
+                  isMaster={syncMode && ind.id === "sp500"}
+                  syncDate={syncMode ? syncDate : null}
+                  onSyncDate={syncMode && ind.id === "sp500" ? handleSyncDate : undefined}
+                />
               </div>
             ))}
           </GridLayout>

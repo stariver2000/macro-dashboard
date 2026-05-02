@@ -16,6 +16,16 @@ export interface Indicator {
 
 export const AVAILABLE_INDICATORS: Indicator[] = [
   {
+    id: "sp500",
+    name: "S&P 500",
+    description: "미국 S&P 500 주가지수 (^GSPC, 일별)",
+    yahooSymbol: "^GSPC",
+    unit: "pt",
+    category: "market",
+    chartType: "line",
+    color: "#10b981",
+  },
+  {
     id: "cape",
     name: "CAPE Ratio (Shiller P/E)",
     description: "주식시장 사이클 조정 주가수익비율 - 10년 평균 실질이익 기준",

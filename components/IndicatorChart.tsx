@@ -13,6 +13,9 @@ import { Indicator } from "@/lib/indicators";
 
 interface Props {
   indicator: Indicator;
+  isMaster?: boolean;
+  syncDate?: string | null;
+  onSyncDate?: (date: string | null) => void;
 }
 
 interface Observation {
@@ -62,11 +65,34 @@ const PERIOD_OPTIONS = [
   { label: "50Y", years: 50 },
 ];
 
+const MAX_SYNC_DIFF_MS = 35 * 24 * 60 * 60 * 1000;
+
+function findNearestObservation(observations: Observation[], targetDate: string): Observation | null {
+  if (observations.length === 0) return null;
+  let lo = 0, hi = observations.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (observations[mid].date < targetDate) lo = mid + 1;
+    else hi = mid;
+  }
+  const candidates: Observation[] = [];
+  if (lo > 0) candidates.push(observations[lo - 1]);
+  if (lo < observations.length) candidates.push(observations[lo]);
+  const targetTime = new Date(targetDate).getTime();
+  let nearest: Observation | null = null;
+  let minDiff = Infinity;
+  for (const c of candidates) {
+    const diff = Math.abs(new Date(c.date).getTime() - targetTime);
+    if (diff < minDiff) { minDiff = diff; nearest = c; }
+  }
+  return nearest && minDiff <= MAX_SYNC_DIFF_MS ? nearest : null;
+}
+
 const CHART_MARGIN = { top: 4, right: 8, left: 0, bottom: 0 };
 const Y_AXIS_WIDTH = 45;
 const LONG_PRESS_MS = 350;
 
-export default function IndicatorChart({ indicator }: Props) {
+export default function IndicatorChart({ indicator, isMaster, syncDate, onSyncDate }: Props) {
   const [periodIdx, setPeriodIdx] = React.useState(5);
   const [isMobile, setIsMobile] = useState(false);
   const [activePoint, setActivePoint] = useState<Observation | null>(null);
@@ -98,6 +124,16 @@ export default function IndicatorChart({ indicator }: Props) {
 
   const observations = data?.observations ?? [];
   const latest = observations[observations.length - 1];
+
+  const syncPoint = syncDate && !isMaster
+    ? findNearestObservation(observations, syncDate)
+    : null;
+
+  useEffect(() => {
+    if (isMaster && onSyncDate) {
+      onSyncDate(activePoint ? activePoint.date : null);
+    }
+  }, [isMaster, activePoint, onSyncDate]);
 
   // x축 시각적 연장 (합성 오늘 포인트)
   const today = new Date().toISOString().slice(0, 10);
@@ -190,6 +226,11 @@ export default function IndicatorChart({ indicator }: Props) {
     <ReferenceLine x={activePoint.date} stroke="rgba(255,255,255,0.45)" strokeWidth={1} />
   ) : null;
 
+  // S&P 동기화 세로선 (비마스터 차트에만)
+  const syncLine = syncPoint ? (
+    <ReferenceLine x={syncPoint.date} stroke="rgba(251,191,36,0.7)" strokeWidth={1.5} strokeDasharray="4 2" />
+  ) : null;
+
   const axis = (
     <>
       <XAxis
@@ -221,6 +262,7 @@ export default function IndicatorChart({ indicator }: Props) {
           </defs>
           {axis}
           <ReferenceLine y={0} stroke="#374151" strokeDasharray="3 3" />
+          {syncLine}
           {cursorLine}
           <Area
             type="monotone"
@@ -240,6 +282,7 @@ export default function IndicatorChart({ indicator }: Props) {
         <BarChart {...sharedProps}>
           {axis}
           <ReferenceLine y={0} stroke="#374151" />
+          {syncLine}
           {cursorLine}
           <Bar dataKey="value" fill={indicator.color} radius={[2, 2, 0, 0]} isAnimationActive={false} activeBar={false} />
         </BarChart>
@@ -248,6 +291,7 @@ export default function IndicatorChart({ indicator }: Props) {
     return (
       <LineChart {...sharedProps}>
         {axis}
+        {syncLine}
         {cursorLine}
         <Line
           type="monotone"
@@ -312,11 +356,23 @@ export default function IndicatorChart({ indicator }: Props) {
         )}
       </div>
 
-      {/* 하단: 클릭/드래그한 지점의 날짜·수치 (모바일·데스크탑 공통) */}
-      <div className="flex-shrink-0 h-5 mt-1 flex items-center justify-center text-xs text-gray-400">
-        {activePoint
-          ? `${formatDateKorean(activePoint.date)} · ${activePoint.value.toFixed(2)} ${indicator.unit}`
-          : "\u00a0"}
+      {/* 하단: 동기화 or 클릭/드래그한 지점의 날짜·수치 */}
+      <div className="flex-shrink-0 h-5 mt-1 flex items-center justify-center text-xs">
+        {syncDate && !isMaster ? (
+          syncPoint ? (
+            <span className="text-amber-400">
+              {formatDateKorean(syncPoint.date)} · {syncPoint.value.toFixed(2)} {indicator.unit}
+            </span>
+          ) : (
+            <span className="text-gray-500">NaN 날짜 없음.</span>
+          )
+        ) : activePoint ? (
+          <span className="text-gray-400">
+            {formatDateKorean(activePoint.date)} · {activePoint.value.toFixed(2)} {indicator.unit}
+          </span>
+        ) : (
+          <span>&nbsp;</span>
+        )}
       </div>
     </div>
   );
