@@ -5,7 +5,6 @@ import {
   AreaChart, Area,
   BarChart, Bar,
   XAxis, YAxis,
-  Tooltip,
   ResponsiveContainer,
   ReferenceLine,
 } from "recharts";
@@ -73,8 +72,11 @@ export default function IndicatorChart({ indicator }: Props) {
   const [activePoint, setActivePoint] = useState<Observation | null>(null);
 
   const chartRef = useRef<HTMLDivElement>(null);
+  // 모바일: 롱프레스 타이머
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isLongPress = useRef(false);
+  // 데스크탑: 마우스 클릭 여부
+  const isPressing = useRef(false);
 
   useEffect(() => {
     setIsMobile(window.innerWidth < 768);
@@ -97,14 +99,14 @@ export default function IndicatorChart({ indicator }: Props) {
   const observations = data?.observations ?? [];
   const latest = observations[observations.length - 1];
 
+  // x축 시각적 연장 (합성 오늘 포인트)
   const today = new Date().toISOString().slice(0, 10);
   const chartData =
     observations.length > 0 && observations[observations.length - 1].date < today
       ? [...observations, { date: today, value: observations[observations.length - 1].value }]
       : observations;
 
-  // 터치 X 좌표 → 가장 가까운 데이터 포인트
-  // chartData(합성 오늘 포인트 포함)로 픽셀 매핑 후, 실제 observations 범위로 제한
+  // 픽셀 X → 가장 가까운 실제 데이터 포인트 (합성 오늘 포인트 제외)
   const findNearestPoint = useCallback(
     (clientX: number) => {
       if (!chartRef.current || chartData.length === 0) return;
@@ -113,14 +115,13 @@ export default function IndicatorChart({ indicator }: Props) {
       const relX = clientX - rect.left - Y_AXIS_WIDTH;
       const ratio = Math.max(0, Math.min(relX / chartAreaWidth, 1));
       const idx = Math.round(ratio * (chartData.length - 1));
-      // 합성 오늘 포인트(마지막)가 선택되지 않도록 실제 데이터 범위로 제한
       const realIdx = Math.min(idx, observations.length - 1);
       setActivePoint(observations[Math.max(0, realIdx)]);
     },
     [chartData, observations]
   );
 
-  // passive:false 터치무브 리스너 (스크롤 막으면서 드래그 탐색)
+  // 모바일: passive:false touchmove (스크롤 방지하고 드래그 탐색)
   useEffect(() => {
     const el = chartRef.current;
     if (!el || !isMobile) return;
@@ -133,6 +134,7 @@ export default function IndicatorChart({ indicator }: Props) {
     return () => el.removeEventListener("touchmove", onMove);
   }, [isMobile, findNearestPoint]);
 
+  // 모바일 이벤트 핸들러
   const handleTouchStart = useCallback(
     (e: React.TouchEvent) => {
       const clientX = e.touches[0].clientX;
@@ -151,13 +153,27 @@ export default function IndicatorChart({ indicator }: Props) {
     // activePoint 유지 (손 뗀 후에도 마지막 위치 표시)
   }, []);
 
-  // 데스크탑 hover 핸들러
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const handleChartMove = useCallback((d: any) => {
-    const payload = d?.activePayload?.[0]?.payload as Observation | undefined;
-    if (payload) setActivePoint(payload);
+  // 데스크탑 이벤트 핸들러 (클릭 후 드래그)
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      isPressing.current = true;
+      findNearestPoint(e.clientX);
+    },
+    [findNearestPoint]
+  );
+
+  const handleMouseMove = useCallback(
+    (e: React.MouseEvent) => {
+      if (!isPressing.current) return;
+      findNearestPoint(e.clientX);
+    },
+    [findNearestPoint]
+  );
+
+  const handleMouseUp = useCallback(() => {
+    isPressing.current = false;
+    // activePoint 유지
   }, []);
-  const handleChartLeave = useCallback(() => setActivePoint(null), []);
 
   const fmtDate = (d: string) => {
     const dt = new Date(d);
@@ -167,23 +183,12 @@ export default function IndicatorChart({ indicator }: Props) {
   const sharedProps = {
     data: chartData,
     margin: CHART_MARGIN,
-    ...(isMobile ? {} : { onMouseMove: handleChartMove, onMouseLeave: handleChartLeave }),
   };
 
-  const tooltipEl = isMobile ? null : (
-    <Tooltip
-      contentStyle={{ backgroundColor: "#1f2937", border: "none", borderRadius: 6, fontSize: 12 }}
-      wrapperStyle={{ outline: "none" }}
-      cursor={{ stroke: "#374151", strokeWidth: 1 }}
-      labelStyle={{ color: "#9ca3af" }}
-      itemStyle={{ color: indicator.color }}
-      formatter={(v) => {
-        const num = typeof v === "number" ? v : parseFloat(String(v));
-        return [`${num.toFixed(2)} ${indicator.unit}`, ""];
-      }}
-      labelFormatter={(l) => formatDateKorean(l)}
-    />
-  );
+  // 눌린 위치 흰색 세로선 (모바일·데스크탑 공통)
+  const cursorLine = activePoint ? (
+    <ReferenceLine x={activePoint.date} stroke="rgba(255,255,255,0.45)" strokeWidth={1} />
+  ) : null;
 
   const axis = (
     <>
@@ -201,15 +206,8 @@ export default function IndicatorChart({ indicator }: Props) {
         axisLine={false}
         width={Y_AXIS_WIDTH}
       />
-      {tooltipEl}
     </>
   );
-
-  // 모바일: 눌린 시점에 흰색 세로선
-  const mobileCursor =
-    isMobile && activePoint ? (
-      <ReferenceLine x={activePoint.date} stroke="rgba(255,255,255,0.45)" strokeWidth={1} />
-    ) : null;
 
   const renderChart = () => {
     if (indicator.chartType === "area") {
@@ -223,7 +221,7 @@ export default function IndicatorChart({ indicator }: Props) {
           </defs>
           {axis}
           <ReferenceLine y={0} stroke="#374151" strokeDasharray="3 3" />
-          {mobileCursor}
+          {cursorLine}
           <Area
             type="monotone"
             dataKey="value"
@@ -242,7 +240,7 @@ export default function IndicatorChart({ indicator }: Props) {
         <BarChart {...sharedProps}>
           {axis}
           <ReferenceLine y={0} stroke="#374151" />
-          {mobileCursor}
+          {cursorLine}
           <Bar dataKey="value" fill={indicator.color} radius={[2, 2, 0, 0]} isAnimationActive={false} activeBar={false} />
         </BarChart>
       );
@@ -250,7 +248,7 @@ export default function IndicatorChart({ indicator }: Props) {
     return (
       <LineChart {...sharedProps}>
         {axis}
-        {mobileCursor}
+        {cursorLine}
         <Line
           type="monotone"
           dataKey="value"
@@ -296,10 +294,12 @@ export default function IndicatorChart({ indicator }: Props) {
       {/* 차트 */}
       <div
         ref={chartRef}
-        className="flex-1 min-h-0 [&_svg]:outline-none [&_*:focus]:outline-none"
-        {...(isMobile
-          ? { onTouchStart: handleTouchStart, onTouchEnd: handleTouchEnd }
-          : {})}
+        className="flex-1 min-h-0 [&_svg]:outline-none [&_*:focus]:outline-none select-none"
+        onTouchStart={isMobile ? handleTouchStart : undefined}
+        onTouchEnd={isMobile ? handleTouchEnd : undefined}
+        onMouseDown={!isMobile ? handleMouseDown : undefined}
+        onMouseMove={!isMobile ? handleMouseMove : undefined}
+        onMouseUp={!isMobile ? handleMouseUp : undefined}
       >
         {isLoading ? (
           <div className="flex items-center justify-center h-full text-gray-500 text-sm">로딩 중...</div>
@@ -312,14 +312,12 @@ export default function IndicatorChart({ indicator }: Props) {
         )}
       </div>
 
-      {/* 모바일: 꾹 누르고 드래그하면 하단에 수치 표시 */}
-      {isMobile && (
-        <div className="flex-shrink-0 h-5 mt-1 flex items-center justify-center text-xs text-gray-400">
-          {activePoint
-            ? `${formatDateKorean(activePoint.date)} · ${activePoint.value.toFixed(2)} ${indicator.unit}`
-            : "\u00a0"}
-        </div>
-      )}
+      {/* 하단: 클릭/드래그한 지점의 날짜·수치 (모바일·데스크탑 공통) */}
+      <div className="flex-shrink-0 h-5 mt-1 flex items-center justify-center text-xs text-gray-400">
+        {activePoint
+          ? `${formatDateKorean(activePoint.date)} · ${activePoint.value.toFixed(2)} ${indicator.unit}`
+          : "\u00a0"}
+      </div>
     </div>
   );
 }
