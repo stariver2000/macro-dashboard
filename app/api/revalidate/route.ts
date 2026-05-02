@@ -8,7 +8,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  revalidateTag("macro-data");
+  revalidateTag("macro-data", "max");
 
   return NextResponse.json({
     revalidated: true,
