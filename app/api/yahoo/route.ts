@@ -3,7 +3,9 @@ import { NextRequest, NextResponse } from "next/server";
 function downsample<T>(arr: T[], max: number): T[] {
   if (arr.length <= max) return arr;
   const step = arr.length / max;
-  return Array.from({ length: max }, (_, i) => arr[Math.round(i * step)]);
+  const result = Array.from({ length: max }, (_, i) => arr[Math.round(i * step)]);
+  result[result.length - 1] = arr[arr.length - 1]; // 최신 포인트 항상 포함
+  return result;
 }
 
 export async function GET(req: NextRequest) {
