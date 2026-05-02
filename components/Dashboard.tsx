@@ -7,6 +7,7 @@ import "react-resizable/css/styles.css";
 import { AVAILABLE_INDICATORS, DEFAULT_INDICATORS } from "@/lib/indicators";
 import IndicatorChart from "./IndicatorChart";
 import AddIndicatorModal from "./AddIndicatorModal";
+import Clock from "./Clock";
 
 const COLS = 12;
 const ITEM_W = 4;
@@ -138,19 +139,22 @@ export default function Dashboard() {
           <h1 className="text-base font-bold tracking-tight">Macro Dashboard</h1>
           <p className="text-xs text-gray-500">드래그로 위젯 배치 · 우상단 × 로 제거</p>
         </div>
-        <div className="flex gap-2">
-          <button
-            onClick={resetLayout}
-            className="text-xs text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 px-3 py-1.5 rounded-lg transition-colors"
-          >
-            레이아웃 초기화
-          </button>
-          <button
-            onClick={() => setShowModal(true)}
-            className="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg transition-colors font-medium"
-          >
-            + 지표 추가
-          </button>
+        <div className="flex items-center gap-4">
+          <Clock />
+          <div className="flex gap-2">
+            <button
+              onClick={resetLayout}
+              className="text-xs text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 px-3 py-1.5 rounded-lg transition-colors"
+            >
+              레이아웃 초기화
+            </button>
+            <button
+              onClick={() => setShowModal(true)}
+              className="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg transition-colors font-medium"
+            >
+              + 지표 추가
+            </button>
+          </div>
         </div>
       </header>
 

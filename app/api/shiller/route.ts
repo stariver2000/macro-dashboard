@@ -6,56 +6,50 @@ function downsample<T>(arr: T[], max: number): T[] {
   return Array.from({ length: max }, (_, i) => arr[Math.round(i * step)]);
 }
 
-const SHILLER_URL =
-  "https://posix4e.github.io/shiller_wrapper_data/data/stock_market_data.json";
+const MONTH_MAP: Record<string, string> = {
+  Jan: "01", Feb: "02", Mar: "03", Apr: "04", May: "05", Jun: "06",
+  Jul: "07", Aug: "08", Sep: "09", Oct: "10", Nov: "11", Dec: "12",
+};
 
-interface ShillerEntry {
-  date?: number;
-  date_string?: string;
-  year?: number;
-  month?: number;
-  [key: string]: unknown;
+function parseDate(raw: string): string | null {
+  const m = raw.trim().match(/^(\w{3})\s+(\d+),\s+(\d{4})$/);
+  if (!m) return null;
+  const mm = MONTH_MAP[m[1]];
+  if (!mm) return null;
+  return `${m[3]}-${mm}-${m[2].padStart(2, "0")}`;
 }
 
-// decimal date (e.g. 1871.01) → "YYYY-MM-DD"
-function decimalDateToString(d: number): string {
-  const year = Math.floor(d);
-  // fractional part encodes month: 1871.01 = Jan, 1871.1 = ~Feb 등
-  // Shiller 데이터는 월말 기준. date * 12 - floor(d) * 12 ≈ month - 1
-  const monthFrac = Math.round((d - year) * 12);
-  const month = monthFrac === 0 ? 1 : monthFrac;
-  return `${year}-${String(month).padStart(2, "0")}-01`;
+function stripTags(s: string) {
+  return s.replace(/<[^>]+>/g, "").replace(/&[^;]+;/g, " ").trim();
 }
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  const key = searchParams.get("key") ?? "cape";
-  const start = searchParams.get("start"); // YYYY-MM-DD
+  const start = searchParams.get("start");
 
   try {
-    const res = await fetch(SHILLER_URL, { next: { revalidate: 86400, tags: ["macro-data"] } }); // 24h 캐시
-    if (!res.ok) throw new Error(`Shiller fetch error: ${res.status}`);
+    const res = await fetch("https://www.multpl.com/shiller-pe/table/by-month", {
+      headers: { "User-Agent": "Mozilla/5.0" },
+      next: { revalidate: 86400, tags: ["macro-data"] },
+    });
+    if (!res.ok) throw new Error(`multpl fetch error: ${res.status}`);
 
-    const json = await res.json();
-    const raw: ShillerEntry[] = json.data ?? [];
+    const html = await res.text();
+    const observations: { date: string; value: number }[] = [];
 
-    const observations = raw
-      .filter((row) => row[key] != null && row[key] !== "")
-      .map((row) => {
-        // 날짜 변환: date_string 우선, 없으면 decimal date 계산
-        let dateStr: string;
-        if (row.date_string && typeof row.date_string === "string") {
-          dateStr = row.date_string;
-        } else if (typeof row.date === "number") {
-          dateStr = decimalDateToString(row.date);
-        } else {
-          dateStr = `${row.year ?? 1900}-${String(row.month ?? 1).padStart(2, "0")}-01`;
-        }
-        return { date: dateStr, value: parseFloat(String(row[key])) };
-      })
-      .filter((o) => !isNaN(o.value))
-      .filter((o) => !start || o.date >= start);
+    for (const rowMatch of html.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)) {
+      const cells = [...rowMatch[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)].map(
+        (m) => stripTags(m[1])
+      );
+      if (cells.length < 2) continue;
+      const date = parseDate(cells[0]);
+      const value = parseFloat(cells[1]);
+      if (!date || isNaN(value)) continue;
+      if (start && date < start) continue;
+      observations.push({ date, value });
+    }
 
+    observations.sort((a, b) => a.date.localeCompare(b.date));
     return NextResponse.json({ observations: downsample(observations, 1200) });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";

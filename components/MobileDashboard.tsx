@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { AVAILABLE_INDICATORS, DEFAULT_INDICATORS } from "@/lib/indicators";
 import IndicatorChart from "./IndicatorChart";
 import AddIndicatorModal from "./AddIndicatorModal";
+import Clock from "./Clock";
 
 const STORAGE_IDS_KEY = "macro-dashboard-indicators";
 
@@ -46,14 +47,19 @@ export default function MobileDashboard() {
 
   return (
     <div className="min-h-screen bg-gray-950 text-white">
-      <header className="sticky top-0 z-40 bg-gray-950/90 backdrop-blur border-b border-gray-800 px-4 py-3 flex items-center justify-between">
-        <h1 className="text-base font-bold tracking-tight">Macro Dashboard</h1>
-        <button
-          onClick={() => setShowModal(true)}
-          className="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg font-medium"
-        >
-          + 지표 추가
-        </button>
+      <header className="sticky top-0 z-40 bg-gray-950/90 backdrop-blur border-b border-gray-800 px-4 py-3">
+        <div className="flex items-center justify-between">
+          <h1 className="text-base font-bold tracking-tight">Macro Dashboard</h1>
+          <button
+            onClick={() => setShowModal(true)}
+            className="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg font-medium"
+          >
+            + 지표 추가
+          </button>
+        </div>
+        <div className="mt-1">
+          <Clock />
+        </div>
       </header>
 
       <main className="p-3 flex flex-col gap-3">

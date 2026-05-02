@@ -1,13 +1,10 @@
 "use client";
+import React, { useState, useEffect, useCallback } from "react";
 import {
-  LineChart,
-  Line,
-  AreaChart,
-  Area,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
+  LineChart, Line,
+  AreaChart, Area,
+  BarChart, Bar,
+  XAxis, YAxis,
   Tooltip,
   ResponsiveContainer,
   ReferenceLine,
@@ -30,6 +27,12 @@ function startDateOf(years: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+function formatDateKorean(dateStr: string): string {
+  const parts = dateStr.split("-");
+  if (parts.length !== 3) return dateStr;
+  return `${parts[0]}년 ${parseInt(parts[1])}월 ${parseInt(parts[2])}일`;
+}
+
 function fetchFred(series: string, start: string) {
   return fetch(`/api/fred?series=${series}&start=${start}`).then((r) => {
     if (!r.ok) throw new Error("API error");
@@ -37,8 +40,8 @@ function fetchFred(series: string, start: string) {
   });
 }
 
-function fetchShiller(key: string, start: string) {
-  return fetch(`/api/shiller?key=${key}&start=${start}`).then((r) => {
+function fetchShiller(start: string) {
+  return fetch(`/api/shiller?start=${start}`).then((r) => {
     if (!r.ok) throw new Error("API error");
     return r.json() as Promise<{ observations: Observation[] }>;
   });
@@ -61,7 +64,14 @@ const PERIOD_OPTIONS = [
 ];
 
 export default function IndicatorChart({ indicator }: Props) {
-  const [periodIdx, setPeriodIdx] = React.useState(5); // 기본 50Y
+  const [periodIdx, setPeriodIdx] = React.useState(5);
+  const [isMobile, setIsMobile] = useState(false);
+  const [activePoint, setActivePoint] = useState<Observation | null>(null);
+
+  useEffect(() => {
+    setIsMobile(window.innerWidth < 768);
+  }, []);
+
   const start = startDateOf(PERIOD_OPTIONS[periodIdx].years);
 
   const source = indicator.yahooSymbol ? "yahoo" : indicator.shillerKey ? "shiller" : "fred";
@@ -71,7 +81,7 @@ export default function IndicatorChart({ indicator }: Props) {
       source === "yahoo"
         ? () => fetchYahoo(indicator.yahooSymbol!, start)
         : source === "shiller"
-        ? () => fetchShiller(indicator.shillerKey!, start)
+        ? () => fetchShiller(start)
         : () => fetchFred(indicator.fredSeries!, start),
     enabled: !!(indicator.yahooSymbol ?? indicator.shillerKey ?? indicator.fredSeries),
   });
@@ -79,14 +89,21 @@ export default function IndicatorChart({ indicator }: Props) {
   const observations = data?.observations ?? [];
   const latest = observations[observations.length - 1];
 
-  // x축을 항상 오늘 날짜까지 연장 (마지막 데이터가 오래됐어도 오늘까지 표시)
+  // x축을 항상 오늘까지 연장
   const today = new Date().toISOString().slice(0, 10);
   const chartData =
     observations.length > 0 && observations[observations.length - 1].date < today
       ? [...observations, { date: today, value: observations[observations.length - 1].value }]
       : observations;
 
-  // x축 날짜 포맷 (데이터 간격에 따라)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const handleChartMove = useCallback((data: any) => {
+    const payload = data?.activePayload?.[0]?.payload as Observation | undefined;
+    if (payload) setActivePoint(payload);
+  }, []);
+
+  const handleChartLeave = useCallback(() => setActivePoint(null), []);
+
   const fmtDate = (d: string) => {
     const dt = new Date(d);
     return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}`;
@@ -95,7 +112,24 @@ export default function IndicatorChart({ indicator }: Props) {
   const sharedProps = {
     data: chartData,
     margin: { top: 4, right: 8, left: 0, bottom: 0 },
+    onMouseMove: handleChartMove,
+    onMouseLeave: handleChartLeave,
   };
+
+  const tooltipEl = isMobile ? null : (
+    <Tooltip
+      contentStyle={{ backgroundColor: "#1f2937", border: "none", borderRadius: 6, fontSize: 12 }}
+      wrapperStyle={{ outline: "none" }}
+      cursor={{ stroke: "#374151", strokeWidth: 1 }}
+      labelStyle={{ color: "#9ca3af" }}
+      itemStyle={{ color: indicator.color }}
+      formatter={(v) => {
+        const num = typeof v === "number" ? v : parseFloat(String(v));
+        return [`${num.toFixed(2)} ${indicator.unit}`, ""];
+      }}
+      labelFormatter={(l) => formatDateKorean(l)}
+    />
+  );
 
   const axis = (
     <>
@@ -113,16 +147,7 @@ export default function IndicatorChart({ indicator }: Props) {
         axisLine={false}
         width={45}
       />
-      <Tooltip
-        contentStyle={{ backgroundColor: "#1f2937", border: "none", borderRadius: 6, fontSize: 12 }}
-        labelStyle={{ color: "#d1d5db" }}
-        itemStyle={{ color: indicator.color }}
-        formatter={(v) => {
-          const num = typeof v === "number" ? v : parseFloat(String(v));
-          return [`${num.toFixed(2)} ${indicator.unit}`, indicator.name];
-        }}
-        labelFormatter={(l) => `날짜: ${l}`}
-      />
+      {tooltipEl}
     </>
   );
 
@@ -145,6 +170,7 @@ export default function IndicatorChart({ indicator }: Props) {
             fill={`url(#grad-${indicator.id})`}
             strokeWidth={1.5}
             dot={false}
+            activeDot={false}
             isAnimationActive={false}
           />
         </AreaChart>
@@ -155,7 +181,7 @@ export default function IndicatorChart({ indicator }: Props) {
         <BarChart {...sharedProps}>
           {axis}
           <ReferenceLine y={0} stroke="#374151" />
-          <Bar dataKey="value" fill={indicator.color} radius={[2, 2, 0, 0]} isAnimationActive={false} />
+          <Bar dataKey="value" fill={indicator.color} radius={[2, 2, 0, 0]} isAnimationActive={false} activeBar={false} />
         </BarChart>
       );
     }
@@ -168,6 +194,7 @@ export default function IndicatorChart({ indicator }: Props) {
           stroke={indicator.color}
           strokeWidth={1.5}
           dot={false}
+          activeDot={false}
           isAnimationActive={false}
         />
       </LineChart>
@@ -186,7 +213,9 @@ export default function IndicatorChart({ indicator }: Props) {
               <span className="text-xs font-normal text-gray-400 ml-1">{indicator.unit}</span>
             </p>
           )}
-          {latest && <p className="text-xs text-gray-500">{latest.date}</p>}
+          {latest && (
+            <p className="text-xs text-gray-500">{formatDateKorean(latest.date)}</p>
+          )}
         </div>
         <div className="flex gap-1 flex-shrink-0">
           {PERIOD_OPTIONS.map((p, i) => (
@@ -206,7 +235,7 @@ export default function IndicatorChart({ indicator }: Props) {
       </div>
 
       {/* 차트 */}
-      <div className="flex-1 min-h-0">
+      <div className="flex-1 min-h-0 [&_svg]:outline-none [&_*:focus]:outline-none">
         {isLoading ? (
           <div className="flex items-center justify-center h-full text-gray-500 text-sm">
             로딩 중...
@@ -221,9 +250,15 @@ export default function IndicatorChart({ indicator }: Props) {
           </ResponsiveContainer>
         )}
       </div>
+
+      {/* 모바일: 꾹 누르면 하단에 수치 표시 */}
+      {isMobile && (
+        <div className="flex-shrink-0 h-5 mt-1 flex items-center justify-center text-xs text-gray-400">
+          {activePoint
+            ? `${formatDateKorean(activePoint.date)} · ${activePoint.value.toFixed(2)} ${indicator.unit}`
+            : "\u00a0"}
+        </div>
+      )}
     </div>
   );
 }
-
-// React import (RSC 아님)
-import React from "react";
