@@ -26,7 +26,7 @@ const PERIODS = [
   { label: "20Y", years: 20 },
 ];
 
-const TABS = ["이상탐지", "SHAP·인과", "정상화 방안", "패턴 매칭"] as const;
+const TABS = ["이상탐지", "어떤 지표 때문?", "정상화 방안", "비슷했던 때는?"] as const;
 type Tab = typeof TABS[number];
 
 function startOf(years: number) {
@@ -73,16 +73,16 @@ function CausalSection({ edges, names }: { edges: CausalEdge[]; names: string[] 
     <div className="space-y-3">
       <div className="flex gap-3 text-xs">
         <div className="bg-blue-950/60 border border-blue-800/50 rounded-lg px-3 py-1.5 flex-1 min-w-0">
-          <p className="text-blue-400 text-xs mb-0.5">최대 원인 지표</p>
+          <p className="text-blue-400 text-xs mb-0.5">시장을 이끄는 지표</p>
           <p className="text-white truncate font-medium">{topCause?.[0] ?? "—"}</p>
         </div>
         <div className="bg-orange-950/60 border border-orange-800/50 rounded-lg px-3 py-1.5 flex-1 min-w-0">
-          <p className="text-orange-400 text-xs mb-0.5">최대 영향 지표</p>
+          <p className="text-orange-400 text-xs mb-0.5">시장에 반응하는 지표</p>
           <p className="text-white truncate font-medium">{topEffect?.[0] ?? "—"}</p>
         </div>
       </div>
 
-      <p className="text-xs text-gray-400">유의 인과 경로 (강도 ≥ 0.25)</p>
+      <p className="text-xs text-gray-400">A가 먼저 움직이면 B도 따라 움직이는 경향</p>
       <div className="space-y-1">
         {edges.slice(0, 8).map((e, i) => (
           <div key={i} className="flex items-center gap-2 text-xs bg-gray-800 rounded-lg px-3 py-1.5">
@@ -93,7 +93,7 @@ function CausalSection({ edges, names }: { edges: CausalEdge[]; names: string[] 
           </div>
         ))}
       </div>
-      <p className="text-xs text-gray-600">Granger 인과성 (F-통계량 기반) · 양방향 화살표는 상호 인과</p>
+      <p className="text-xs text-gray-600">강도가 높을수록 선후행 관계가 뚜렷함 · 양방향이면 서로 영향</p>
     </div>
   );
 }
@@ -351,7 +351,7 @@ export default function AnomalyPanel({ selectedIds, allIndicators, onAnomalyDate
               <p className="text-xs text-gray-400 mb-1.5">이상 탐지 결과 ({report.anomalies.length}건) — 클릭하면 다른 탭에서 상세 분석</p>
               <div className="space-y-1">
                 {report.anomalies.map((a, i) => (
-                  <button key={a.date} onClick={() => { setSelIdx(i); setActiveTab("SHAP·인과"); onSelectAnomaly(a.date); }}
+                  <button key={a.date} onClick={() => { setSelIdx(i); setActiveTab("어떤 지표 때문?"); onSelectAnomaly(a.date); }}
                     className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-colors ${
                       selIdx === i ? "bg-red-950/60 border border-red-800/60" : "bg-gray-800 hover:bg-gray-750 border border-transparent"
                     }`}>
@@ -365,7 +365,7 @@ export default function AnomalyPanel({ selectedIds, allIndicators, onAnomalyDate
         )}
 
         {/* ── 탭 2: SHAP · 인과 ───────────────────────────────────── */}
-        {report && activeTab === "SHAP·인과" && (
+        {report && activeTab === "어떤 지표 때문?" && (
           <div className="space-y-5">
             {/* 이상 포인트 선택 */}
             <div>
@@ -386,9 +386,9 @@ export default function AnomalyPanel({ selectedIds, allIndicators, onAnomalyDate
             {anomaly && shapData.length > 0 && (
               <div>
                 <p className="text-xs text-gray-400 mb-0.5">
-                  SHAP 기여도 <span className="text-gray-600">— {anomaly.date}</span>
+                  이상을 일으킨 지표 <span className="text-gray-600">— {anomaly.date}</span>
                 </p>
-                <p className="text-xs text-gray-600 mb-2">빨강(+) 이상 점수를 높임 · 초록(-) 낮춤</p>
+                <p className="text-xs text-gray-600 mb-2">빨강 = 이상을 키운 지표 · 초록 = 이상을 줄인 지표</p>
                 <div style={{ height: shapData.length * 30 + 8 }}>
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={shapData} layout="vertical" margin={{ top: 0, right: 8, left: 0, bottom: 0 }}>
@@ -406,7 +406,7 @@ export default function AnomalyPanel({ selectedIds, allIndicators, onAnomalyDate
 
             {/* Causal */}
             <div>
-              <p className="text-xs text-gray-400 mb-2">인과 관계 분석 (Granger Causality)</p>
+              <p className="text-xs text-gray-400 mb-2">지표 간 선후행 관계</p>
               <CausalSection edges={report.causalEdges} names={report.featureLabels} />
             </div>
           </div>
@@ -477,7 +477,7 @@ export default function AnomalyPanel({ selectedIds, allIndicators, onAnomalyDate
         )}
 
         {/* ── 탭 4: 패턴 매칭 (Mechanistic Interpretability) ─────── */}
-        {report && activeTab === "패턴 매칭" && (
+        {report && activeTab === "비슷했던 때는?" && (
           <div className="space-y-4">
             <div>
               <p className="text-xs text-gray-400 mb-1.5">분석 포인트 선택</p>
@@ -497,10 +497,10 @@ export default function AnomalyPanel({ selectedIds, allIndicators, onAnomalyDate
               <>
                 <div>
                   <p className="text-xs text-gray-400 mb-0.5">
-                    <span className="font-mono text-red-300">{anomaly.date}</span> 의 이상 패턴
+                    <span className="font-mono text-red-300">{anomaly.date}</span> 와 가장 비슷했던 과거 시점
                   </p>
                   <p className="text-xs text-gray-600 mb-3">
-                    SHAP 벡터 코사인 유사도 기준 — 가장 닮은 과거 이상 시점
+                    같은 지표들이 비슷한 방향으로 이상했던 시기를 찾아줘요
                   </p>
 
                   {anomaly.similarPatterns.length === 0 ? (
@@ -525,7 +525,7 @@ export default function AnomalyPanel({ selectedIds, allIndicators, onAnomalyDate
 
                 {/* 현재 이상의 SHAP 지문 */}
                 <div>
-                  <p className="text-xs text-gray-400 mb-2">이상 패턴 지문 (SHAP 프로파일)</p>
+                  <p className="text-xs text-gray-400 mb-2">이 시점의 이상 특징</p>
                   <div className="space-y-1">
                     {report.featureLabels.map((name, j) => {
                       const v = anomaly.shap[j];
@@ -546,7 +546,7 @@ export default function AnomalyPanel({ selectedIds, allIndicators, onAnomalyDate
                     })}
                   </div>
                   <p className="text-xs text-gray-600 mt-2">
-                    유사도가 높을수록 두 이상 사건의 발생 메커니즘이 비슷함을 의미합니다.
+                    숫자가 높을수록 그 시기와 지금의 이상 패턴이 더 닮아 있어요.
                   </p>
                 </div>
               </>
