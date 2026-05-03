@@ -245,18 +245,36 @@ export default function IndicatorChart({ indicator, isMaster, syncDate, onSyncDa
     <ReferenceLine x={syncPoint.date} stroke="rgba(251,191,36,0.7)" strokeWidth={1.5} strokeDasharray="4 2" />
   ) : null;
 
+  // 월별 이상탐지 날짜(YYYY-MM-01)가 일별 차트 데이터에 없을 수 있으므로
+  // ±35일 내 가장 가까운 차트 날짜를 찾아 선을 그림
+  const MAX_ANOMALY_DIFF_MS = 35 * 24 * 60 * 60 * 1000;
+  function nearestChartDate(target: string): string | null {
+    const t = new Date(target).getTime();
+    let nearest: string | null = null;
+    let minDiff = Infinity;
+    for (const d of chartData) {
+      const diff = Math.abs(new Date(d.date).getTime() - t);
+      if (diff < minDiff) { minDiff = diff; nearest = d.date; }
+    }
+    return nearest && minDiff <= MAX_ANOMALY_DIFF_MS ? nearest : null;
+  }
+
   // 이상탐지 하이라이트 — 선택되지 않은 날짜: 연한 점선
   const anomalyLines = anomalyDates && anomalyDates.size > 0
-    ? chartData
-        .filter(d => anomalyDates.has(d.date) && d.date !== selectedAnomalyDate)
+    ? [...anomalyDates]
+        .filter(d => d !== selectedAnomalyDate)
+        .map(d => nearestChartDate(d))
+        .filter((d): d is string => d !== null)
+        .filter((d, i, arr) => arr.indexOf(d) === i) // 중복 제거
         .map(d => (
-          <ReferenceLine key={`anomaly-${d.date}`} x={d.date} stroke="rgba(239,68,68,0.4)" strokeWidth={1.5} strokeDasharray="3 2" />
+          <ReferenceLine key={`anomaly-${d}`} x={d} stroke="rgba(239,68,68,0.4)" strokeWidth={1.5} strokeDasharray="3 2" />
         ))
     : null;
 
-  // 선택된 이상탐지 포인트: 굵은 실선 + 반투명 배경
-  const selectedAnomalyLine = selectedAnomalyDate && chartData.some(d => d.date === selectedAnomalyDate)
-    ? <ReferenceLine x={selectedAnomalyDate} stroke="#ef4444" strokeWidth={2.5} label={{ value: "!", position: "insideTopRight", fill: "#ef4444", fontSize: 11 }} />
+  // 선택된 이상탐지 포인트: nearest date 매칭 후 굵은 실선
+  const selectedNearestDate = selectedAnomalyDate ? nearestChartDate(selectedAnomalyDate) : null;
+  const selectedAnomalyLine = selectedNearestDate
+    ? <ReferenceLine x={selectedNearestDate} stroke="#ef4444" strokeWidth={2.5} label={{ value: "!", position: "insideTopRight", fill: "#ef4444", fontSize: 11 }} />
     : null;
 
   const axis = (

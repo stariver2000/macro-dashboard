@@ -174,4 +174,4 @@ export const CATEGORY_LABELS: Record<Indicator["category"], string> = {
   commodity: "원자재",
 };
 
-export const DEFAULT_INDICATORS = ["cape", "hy_spread", "yield_curve", "fed_rate", "copper", "vix"];
+export const DEFAULT_INDICATORS = ["sp500", "vix", "copper", "yield_curve", "fed_rate", "cape"];

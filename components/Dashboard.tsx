@@ -76,13 +76,15 @@ export default function Dashboard() {
     setMounted(true);
   }, []);
 
+  const PANEL_WIDTH = 416; // 26rem
+
   useEffect(() => {
     if (!mounted) return;
-    const update = () => setContainerWidth(window.innerWidth - 48);
+    const update = () => setContainerWidth(window.innerWidth - 48 - (anomalyMode ? PANEL_WIDTH : 0));
     update();
     window.addEventListener("resize", update);
     return () => window.removeEventListener("resize", update);
-  }, [mounted]);
+  }, [mounted, anomalyMode]);
 
   const handleSyncDate = useCallback((date: string | null) => {
     setSyncDate(date);
@@ -225,7 +227,7 @@ export default function Dashboard() {
       </header>
 
       {/* 그리드 */}
-      <main className="p-6">
+      <main className={`p-6 transition-[margin] duration-200 ${anomalyMode ? "mr-[26rem]" : ""}`}>
         {indicators.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-96 gap-4">
             <p className="text-gray-500">표시할 지표가 없습니다.</p>
