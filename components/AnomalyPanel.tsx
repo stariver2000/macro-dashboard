@@ -6,7 +6,7 @@ import {
   XAxis, YAxis, ResponsiveContainer, ReferenceLine, Cell,
 } from "recharts";
 import { Indicator } from "@/lib/indicators";
-import { runAnomalyDetection, alignSeries, AnomalyReport, CausalEdge } from "@/lib/isolationForest";
+import { runAnomalyDetection, alignSeries, AnomalyReport, CausalEdge, AlignMode } from "@/lib/isolationForest";
 
 interface Props {
   selectedIds:   string[];
@@ -100,6 +100,7 @@ function CausalSection({ edges, names }: { edges: CausalEdge[]; names: string[] 
 // ── Component ────────────────────────────────────────────────────────────────
 export default function AnomalyPanel({ selectedIds, allIndicators, onAnomalyDates, onClose }: Props) {
   const [periodIdx, setPeriodIdx] = useState(3);
+  const [alignMode, setAlignMode] = useState<AlignMode>("monthly");
   const [useCustom, setUseCustom] = useState(false);
   const [customStart, setCustomStart] = useState(() => startOf(10));
   const [customEnd,   setCustomEnd]   = useState(() => new Date().toISOString().slice(0, 10));
@@ -130,11 +131,11 @@ export default function AnomalyPanel({ selectedIds, allIndicators, onAnomalyDate
         // 커스텀 종료일 적용: end 이후 데이터 제외
         observations: (multiData[i]?.observations ?? []).filter(o => o.date <= end),
       }));
-      const aligned = alignSeries(series);
+      const aligned = alignSeries(series, alignMode);
       setAlignedCount(aligned.length);
       if (aligned.length < 10) { setIsRunning(false); return; }
 
-      const result = runAnomalyDetection(aligned, selectedInds.map(i => i.name));
+      const result = runAnomalyDetection(aligned, selectedInds.map(i => i.name), { alignMode });
       setReport(result);
       setSelIdx(0);
       setActiveTab("이상탐지");
@@ -183,6 +184,25 @@ export default function AnomalyPanel({ selectedIds, allIndicators, onAnomalyDate
           </div>
         )}
 
+        {/* 분석 단위 */}
+        <div>
+          <p className="text-xs text-gray-500 mb-1">분석 단위</p>
+          <div className="flex gap-1">
+            {(["monthly", "daily"] as AlignMode[]).map(m => (
+              <button key={m}
+                onClick={() => { setAlignMode(m); setReport(null); setAlignedCount(null); }}
+                className={`flex-1 text-xs py-1 rounded transition-colors ${alignMode === m ? "bg-gray-600 text-white" : "text-gray-500 hover:text-gray-300"}`}>
+                {m === "monthly" ? "월별 (Downsample)" : "일별 (Forward Fill)"}
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-gray-600 mt-1">
+            {alignMode === "monthly"
+              ? "일별 지표를 월별로 다운샘플 · 거시 흐름 분석에 적합"
+              : "월별 지표를 앞값으로 채워 일별 격자에 맞춤 · 단기 급변 감지에 적합"}
+          </p>
+        </div>
+
         {/* 기간 선택 */}
         <div className="space-y-2">
           <div className="flex gap-1 flex-wrap">
@@ -230,10 +250,12 @@ export default function AnomalyPanel({ selectedIds, allIndicators, onAnomalyDate
         </button>
 
         {alignedCount !== null && alignedCount < 10 && (
-          <p className="text-xs text-amber-400">공통 날짜 {alignedCount}개 — 기간을 늘리거나 유사 빈도 지표로 조합하세요.</p>
+          <p className="text-xs text-amber-400">공통 날짜 {alignedCount}개 — 기간을 늘려보세요.</p>
         )}
-        {alignedCount !== null && alignedCount >= 10 && !isRunning && (
-          <p className="text-xs text-gray-600">공통 데이터 {alignedCount}개 포인트 분석</p>
+        {alignedCount !== null && alignedCount >= 10 && !isRunning && report && (
+          <p className="text-xs text-gray-600">
+            {report.resampledTo === "monthly" ? "월별" : "일별"} 리샘플링 · {alignedCount}개 포인트
+          </p>
         )}
       </div>
 

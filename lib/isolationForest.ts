@@ -39,8 +39,9 @@ export interface AnomalyReport {
   scores: number[];
   dates: string[];
   anomalies: AnomalyResult[];
-  featureLabels: string[];  // indicator names
+  featureLabels: string[];
   causalEdges: CausalEdge[];
+  resampledTo: "daily" | "monthly";
 }
 
 // ── Isolation Forest core ────────────────────────────────────────────────────
@@ -331,21 +332,23 @@ export function runAnomalyDetection(
   alignedData: AlignedPoint[],
   indicatorNames: string[],
   options: {
-    nEstimators?:  number;
+    nEstimators?:   number;
     subsampleSize?: number;
-    topK?:         number;
-    threshold?:    number;
+    topK?:          number;
+    threshold?:     number;
     nPermutations?: number;
-    grangerLag?:   number;
+    grangerLag?:    number;
+    alignMode?:     AlignMode;
   } = {}
 ): AnomalyReport {
   const {
-    nEstimators  = 100,
+    nEstimators   = 100,
     subsampleSize = 256,
-    topK         = 10,
-    threshold    = 0.6,
+    topK          = 10,
+    threshold     = 0.6,
     nPermutations = 50,
-    grangerLag   = 2,
+    grangerLag    = 2,
+    alignMode     = "monthly",
   } = options;
 
   const nInd = indicatorNames.length;
@@ -424,30 +427,105 @@ export function runAnomalyDetection(
 
   return {
     scores,
-    dates:        alignedData.map(d => d.date),
+    dates:         alignedData.map(d => d.date),
     anomalies,
     featureLabels: indicatorNames,
     causalEdges,
+    resampledTo:   alignMode,
   };
 }
 
-// ── Utility: align multiple time series by common dates ──────────────────────
+// ── Utility: align multiple time series ──────────────────────────────────────
+
+// 평균 관측 간격 > 20일이면 월별
+export function detectFrequency(obs: { date: string }[]): "monthly" | "daily" {
+  if (obs.length < 2) return "monthly";
+  const sample = obs.slice(0, Math.min(12, obs.length));
+  let gap = 0;
+  for (let i = 1; i < sample.length; i++)
+    gap += new Date(sample[i].date).getTime() - new Date(sample[i - 1].date).getTime();
+  return gap / (sample.length - 1) / 86400000 > 20 ? "monthly" : "daily";
+}
+
+// 일별 → 월별: 각 월의 평균값
+function toMonthly(obs: { date: string; value: number }[]): { date: string; value: number }[] {
+  const buckets = new Map<string, number[]>();
+  for (const o of obs) {
+    const ym = o.date.slice(0, 7);
+    if (!buckets.has(ym)) buckets.set(ym, []);
+    buckets.get(ym)!.push(o.value);
+  }
+  return [...buckets.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([ym, vals]) => ({
+      date: `${ym}-01`,
+      value: vals.reduce((s, v) => s + v, 0) / vals.length,
+    }));
+}
+
+// 월별 → 일별: 기준 날짜 배열에 대해 앞값으로 채움 (Forward Fill)
+function forwardFill(
+  monthly: { date: string; value: number }[],
+  dailyDates: string[]
+): { date: string; value: number }[] {
+  const sorted = [...monthly].sort((a, b) => a.date.localeCompare(b.date));
+  const result: { date: string; value: number }[] = [];
+  let last: number | undefined;
+  let si = 0;
+  for (const date of dailyDates) {
+    while (si < sorted.length && sorted[si].date <= date) { last = sorted[si].value; si++; }
+    if (last !== undefined) result.push({ date, value: last });
+  }
+  return result;
+}
+
+function strictIntersect(
+  series: { observations: { date: string; value: number }[] }[]
+): AlignedPoint[] {
+  const maps = series.map(s => { const m = new Map<string, number>(); s.observations.forEach(o => m.set(o.date, o.value)); return m; });
+  return series[0].observations
+    .map(o => o.date)
+    .filter(d => maps.every(m => m.has(d)))
+    .sort()
+    .map(date => ({ date, values: maps.map(m => m.get(date)!) }));
+}
+
+export type AlignMode = "daily" | "monthly";
 
 export function alignSeries(
-  series: { name: string; observations: { date: string; value: number }[] }[]
+  series: { name: string; observations: { date: string; value: number }[] }[],
+  mode: AlignMode = "monthly"
 ): AlignedPoint[] {
   if (series.length === 0) return [];
-  const maps = series.map(s => {
-    const m = new Map<string, number>();
-    s.observations.forEach(o => m.set(o.date, o.value));
-    return m;
-  });
-  const commonDates = series[0].observations
-    .map(o => o.date)
-    .filter(date => maps.every(m => m.has(date)))
-    .sort();
-  return commonDates.map(date => ({
-    date,
-    values: maps.map(m => m.get(date)!),
-  }));
+  const freqs = series.map(s => detectFrequency(s.observations));
+
+  if (mode === "monthly") {
+    // 일별 지표 → 다운샘플링, 월별은 그대로
+    return strictIntersect(series.map((s, i) => ({
+      ...s,
+      observations: freqs[i] === "daily" ? toMonthly(s.observations) : s.observations,
+    })));
+  } else {
+    // 일별 모드: 일별 지표들의 교집합 날짜를 기준으로, 월별 지표는 Forward Fill
+    const dailySeries = series.filter((_, i) => freqs[i] === "daily");
+    if (dailySeries.length === 0) {
+      // 모든 지표가 월별이면 월별 모드로 폴백
+      return strictIntersect(series);
+    }
+
+    // 일별 지표끼리 공통 날짜 (영업일 교집합)
+    const dailyMaps = dailySeries.map(s => new Set(s.observations.map(o => o.date)));
+    const refDates = dailySeries[0].observations
+      .map(o => o.date)
+      .filter(d => dailyMaps.every(m => m.has(d)))
+      .sort();
+
+    // 월별 지표 → Forward Fill 후 refDates 기준으로 맞춤
+    const normalized = series.map((s, i) => ({
+      ...s,
+      observations: freqs[i] === "monthly" ? forwardFill(s.observations, refDates) : s.observations,
+    }));
+
+    return strictIntersect(normalized);
+  }
 }
