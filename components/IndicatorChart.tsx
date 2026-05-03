@@ -16,6 +16,7 @@ interface Props {
   isMaster?: boolean;
   syncDate?: string | null;
   onSyncDate?: (date: string | null) => void;
+  anomalyDates?: Set<string>;
 }
 
 interface Observation {
@@ -92,7 +93,7 @@ const CHART_MARGIN = { top: 4, right: 8, left: 0, bottom: 0 };
 const Y_AXIS_WIDTH = 45;
 const LONG_PRESS_MS = 350;
 
-export default function IndicatorChart({ indicator, isMaster, syncDate, onSyncDate }: Props) {
+export default function IndicatorChart({ indicator, isMaster, syncDate, onSyncDate, anomalyDates }: Props) {
   const [periodIdx, setPeriodIdx] = React.useState(5);
   const [isMobile, setIsMobile] = useState(false);
   const [activePoint, setActivePoint] = useState<Observation | null>(null);
@@ -243,6 +244,15 @@ export default function IndicatorChart({ indicator, isMaster, syncDate, onSyncDa
     <ReferenceLine x={syncPoint.date} stroke="rgba(251,191,36,0.7)" strokeWidth={1.5} strokeDasharray="4 2" />
   ) : null;
 
+  // 이상탐지 하이라이트 (빨간 세로선)
+  const anomalyLines = anomalyDates && anomalyDates.size > 0
+    ? chartData
+        .filter(d => anomalyDates.has(d.date))
+        .map(d => (
+          <ReferenceLine key={`anomaly-${d.date}`} x={d.date} stroke="rgba(239,68,68,0.55)" strokeWidth={1.5} strokeDasharray="3 2" />
+        ))
+    : null;
+
   const axis = (
     <>
       <XAxis
@@ -274,6 +284,7 @@ export default function IndicatorChart({ indicator, isMaster, syncDate, onSyncDa
           </defs>
           {axis}
           <ReferenceLine y={0} stroke="#374151" strokeDasharray="3 3" />
+          {anomalyLines}
           {syncLine}
           {cursorLine}
           <Area
@@ -294,6 +305,7 @@ export default function IndicatorChart({ indicator, isMaster, syncDate, onSyncDa
         <BarChart {...sharedProps}>
           {axis}
           <ReferenceLine y={0} stroke="#374151" />
+          {anomalyLines}
           {syncLine}
           {cursorLine}
           <Bar dataKey="value" fill={indicator.color} radius={[2, 2, 0, 0]} isAnimationActive={false} activeBar={false} />
@@ -303,6 +315,7 @@ export default function IndicatorChart({ indicator, isMaster, syncDate, onSyncDa
     return (
       <LineChart {...sharedProps}>
         {axis}
+        {anomalyLines}
         {syncLine}
         {cursorLine}
         <Line

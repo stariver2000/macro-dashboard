@@ -7,6 +7,7 @@ import "react-resizable/css/styles.css";
 import { AVAILABLE_INDICATORS, DEFAULT_INDICATORS } from "@/lib/indicators";
 import IndicatorChart from "./IndicatorChart";
 import AddIndicatorModal from "./AddIndicatorModal";
+import AnomalyPanel from "./AnomalyPanel";
 import Clock from "./Clock";
 
 const COLS = 12;
@@ -54,6 +55,9 @@ export default function Dashboard() {
   const [containerWidth, setContainerWidth] = useState(1200);
   const [syncMode, setSyncMode] = useState(false);
   const [syncDate, setSyncDate] = useState<string | null>(null);
+  const [anomalyMode, setAnomalyMode] = useState(false);
+  const [selectedForAnomaly, setSelectedForAnomaly] = useState<Set<string>>(new Set());
+  const [anomalyDates, setAnomalyDates] = useState<Set<string>>(new Set());
 
   // localStorage에서 저장된 상태 복원 (클라이언트 전용)
   useEffect(() => {
@@ -81,6 +85,26 @@ export default function Dashboard() {
 
   const handleSyncDate = useCallback((date: string | null) => {
     setSyncDate(date);
+  }, []);
+
+  const toggleAnomalyMode = useCallback(() => {
+    setAnomalyMode(prev => {
+      if (prev) {
+        setSelectedForAnomaly(new Set());
+        setAnomalyDates(new Set());
+      }
+      return !prev;
+    });
+  }, []);
+
+  const toggleAnomalySelect = useCallback((id: string) => {
+    setSelectedForAnomaly(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+    setAnomalyDates(new Set());
   }, []);
 
   const toggleSync = useCallback(() => {
@@ -167,6 +191,18 @@ export default function Dashboard() {
           <Clock />
           <div className="flex gap-2">
             <button
+              onClick={toggleAnomalyMode}
+              className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${
+                anomalyMode
+                  ? "bg-red-800 border-red-700 text-white"
+                  : "text-gray-400 hover:text-white border-gray-700 hover:border-gray-500"
+              }`}
+            >
+              {anomalyMode
+                ? `이상탐지 ON${selectedForAnomaly.size > 0 ? ` (${selectedForAnomaly.size})` : ""}`
+                : "이상탐지"}
+            </button>
+            <button
               onClick={toggleSync}
               className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${
                 syncMode
@@ -211,13 +247,33 @@ export default function Dashboard() {
             {indicators.map((ind) => (
               <div
                 key={ind.id}
-                className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex flex-col overflow-hidden"
+                className={`bg-gray-900 border rounded-xl p-4 flex flex-col overflow-hidden transition-colors ${
+                  anomalyMode && selectedForAnomaly.has(ind.id)
+                    ? "border-red-700/70"
+                    : "border-gray-800"
+                }`}
               >
                 <div className="drag-handle flex items-center justify-between cursor-grab active:cursor-grabbing mb-1 flex-shrink-0">
-                  <div className="flex gap-0.5">
-                    {[0, 1, 2].map((i) => (
-                      <div key={i} className="w-0.5 h-3 bg-gray-600 rounded" />
-                    ))}
+                  <div className="flex items-center gap-2">
+                    <div className="flex gap-0.5">
+                      {[0, 1, 2].map((i) => (
+                        <div key={i} className="w-0.5 h-3 bg-gray-600 rounded" />
+                      ))}
+                    </div>
+                    {anomalyMode && (
+                      <label
+                        onMouseDown={(e) => e.stopPropagation()}
+                        className="flex items-center gap-1.5 cursor-pointer select-none"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedForAnomaly.has(ind.id)}
+                          onChange={() => toggleAnomalySelect(ind.id)}
+                          className="w-3.5 h-3.5 accent-red-500 cursor-pointer"
+                        />
+                        <span className="text-xs text-gray-400">선택</span>
+                      </label>
+                    )}
                   </div>
                   <button
                     onMouseDown={(e) => e.stopPropagation()}
@@ -232,6 +288,7 @@ export default function Dashboard() {
                   isMaster={syncMode && ind.id === "sp500"}
                   syncDate={syncMode ? syncDate : null}
                   onSyncDate={syncMode && ind.id === "sp500" ? handleSyncDate : undefined}
+                  anomalyDates={anomalyDates.size > 0 ? anomalyDates : undefined}
                 />
               </div>
             ))}
@@ -244,6 +301,15 @@ export default function Dashboard() {
           activeIds={indicatorIds}
           onAdd={addIndicator}
           onClose={() => setShowModal(false)}
+        />
+      )}
+
+      {anomalyMode && (
+        <AnomalyPanel
+          selectedIds={[...selectedForAnomaly]}
+          allIndicators={indicators}
+          onAnomalyDates={setAnomalyDates}
+          onClose={toggleAnomalyMode}
         />
       )}
     </div>
