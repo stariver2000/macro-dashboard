@@ -9,9 +9,10 @@ import { Indicator } from "@/lib/indicators";
 import { runAnomalyDetection, alignSeries, AnomalyReport, CausalEdge, AlignMode } from "@/lib/isolationForest";
 
 interface Props {
-  selectedIds:   string[];
-  allIndicators: Indicator[];
+  selectedIds:    string[];
+  allIndicators:  Indicator[];
   onAnomalyDates: (dates: Set<string>) => void;
+  onSelectAnomaly: (date: string | null) => void;
   onClose: () => void;
 }
 
@@ -98,7 +99,7 @@ function CausalSection({ edges, names }: { edges: CausalEdge[]; names: string[] 
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
-export default function AnomalyPanel({ selectedIds, allIndicators, onAnomalyDates, onClose }: Props) {
+export default function AnomalyPanel({ selectedIds, allIndicators, onAnomalyDates, onSelectAnomaly, onClose }: Props) {
   const [periodIdx, setPeriodIdx] = useState(3);
   const [alignMode, setAlignMode] = useState<AlignMode>("monthly");
   const [useCustom, setUseCustom] = useState(false);
@@ -140,6 +141,7 @@ export default function AnomalyPanel({ selectedIds, allIndicators, onAnomalyDate
       setSelIdx(0);
       setActiveTab("이상탐지");
       onAnomalyDates(new Set(result.anomalies.map(a => a.date)));
+      if (result.anomalies.length > 0) onSelectAnomaly(result.anomalies[0].date);
       setIsRunning(false);
     }, 50);
   };
@@ -165,7 +167,7 @@ export default function AnomalyPanel({ selectedIds, allIndicators, onAnomalyDate
           <p className="text-sm font-semibold text-white">이상탐지 분석</p>
           <p className="text-xs text-gray-500">IF · SHAP · Recourse · Granger · Pattern</p>
         </div>
-        <button onClick={onClose} className="text-gray-500 hover:text-white text-xl leading-none">×</button>
+        <button onClick={() => { onSelectAnomaly(null); onClose(); }} className="text-gray-500 hover:text-white text-xl leading-none">×</button>
       </div>
 
       {/* 설정 + 실행 */}
@@ -312,7 +314,7 @@ export default function AnomalyPanel({ selectedIds, allIndicators, onAnomalyDate
               <p className="text-xs text-gray-400 mb-1.5">이상 탐지 결과 ({report.anomalies.length}건) — 클릭하면 다른 탭에서 상세 분석</p>
               <div className="space-y-1">
                 {report.anomalies.map((a, i) => (
-                  <button key={a.date} onClick={() => { setSelIdx(i); setActiveTab("SHAP·인과"); }}
+                  <button key={a.date} onClick={() => { setSelIdx(i); setActiveTab("SHAP·인과"); onSelectAnomaly(a.date); }}
                     className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-colors ${
                       selIdx === i ? "bg-red-950/60 border border-red-800/60" : "bg-gray-800 hover:bg-gray-750 border border-transparent"
                     }`}>
@@ -333,7 +335,7 @@ export default function AnomalyPanel({ selectedIds, allIndicators, onAnomalyDate
               <p className="text-xs text-gray-400 mb-1.5">분석 포인트 선택</p>
               <div className="flex flex-wrap gap-1">
                 {report.anomalies.map((a, i) => (
-                  <button key={a.date} onClick={() => setSelIdx(i)}
+                  <button key={a.date} onClick={() => { setSelIdx(i); onSelectAnomaly(a.date); }}
                     className={`text-xs px-2 py-0.5 rounded font-mono transition-colors ${
                       selIdx === i ? "bg-red-800 text-white" : "bg-gray-800 text-gray-400 hover:text-white"
                     }`}>
@@ -380,7 +382,7 @@ export default function AnomalyPanel({ selectedIds, allIndicators, onAnomalyDate
               <p className="text-xs text-gray-400 mb-1.5">분석 포인트 선택</p>
               <div className="flex flex-wrap gap-1">
                 {report.anomalies.map((a, i) => (
-                  <button key={a.date} onClick={() => setSelIdx(i)}
+                  <button key={a.date} onClick={() => { setSelIdx(i); onSelectAnomaly(a.date); }}
                     className={`text-xs px-2 py-0.5 rounded font-mono transition-colors ${
                       selIdx === i ? "bg-red-800 text-white" : "bg-gray-800 text-gray-400 hover:text-white"
                     }`}>
@@ -444,7 +446,7 @@ export default function AnomalyPanel({ selectedIds, allIndicators, onAnomalyDate
               <p className="text-xs text-gray-400 mb-1.5">분석 포인트 선택</p>
               <div className="flex flex-wrap gap-1">
                 {report.anomalies.map((a, i) => (
-                  <button key={a.date} onClick={() => setSelIdx(i)}
+                  <button key={a.date} onClick={() => { setSelIdx(i); onSelectAnomaly(a.date); }}
                     className={`text-xs px-2 py-0.5 rounded font-mono transition-colors ${
                       selIdx === i ? "bg-red-800 text-white" : "bg-gray-800 text-gray-400 hover:text-white"
                     }`}>

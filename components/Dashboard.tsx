@@ -58,6 +58,7 @@ export default function Dashboard() {
   const [anomalyMode, setAnomalyMode] = useState(false);
   const [selectedForAnomaly, setSelectedForAnomaly] = useState<Set<string>>(new Set());
   const [anomalyDates, setAnomalyDates] = useState<Set<string>>(new Set());
+  const [selectedAnomalyDate, setSelectedAnomalyDate] = useState<string | null>(null);
 
   // localStorage에서 저장된 상태 복원 (클라이언트 전용)
   useEffect(() => {
@@ -92,6 +93,7 @@ export default function Dashboard() {
       if (prev) {
         setSelectedForAnomaly(new Set());
         setAnomalyDates(new Set());
+        setSelectedAnomalyDate(null);
       }
       return !prev;
     });
@@ -289,6 +291,7 @@ export default function Dashboard() {
                   syncDate={syncMode ? syncDate : null}
                   onSyncDate={syncMode && ind.id === "sp500" ? handleSyncDate : undefined}
                   anomalyDates={anomalyDates.size > 0 ? anomalyDates : undefined}
+                  selectedAnomalyDate={selectedAnomalyDate ?? undefined}
                 />
               </div>
             ))}
@@ -309,6 +312,7 @@ export default function Dashboard() {
           selectedIds={[...selectedForAnomaly]}
           allIndicators={indicators}
           onAnomalyDates={setAnomalyDates}
+          onSelectAnomaly={setSelectedAnomalyDate}
           onClose={toggleAnomalyMode}
         />
       )}

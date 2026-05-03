@@ -17,6 +17,7 @@ interface Props {
   syncDate?: string | null;
   onSyncDate?: (date: string | null) => void;
   anomalyDates?: Set<string>;
+  selectedAnomalyDate?: string;
 }
 
 interface Observation {
@@ -93,7 +94,7 @@ const CHART_MARGIN = { top: 4, right: 8, left: 0, bottom: 0 };
 const Y_AXIS_WIDTH = 45;
 const LONG_PRESS_MS = 350;
 
-export default function IndicatorChart({ indicator, isMaster, syncDate, onSyncDate, anomalyDates }: Props) {
+export default function IndicatorChart({ indicator, isMaster, syncDate, onSyncDate, anomalyDates, selectedAnomalyDate }: Props) {
   const [periodIdx, setPeriodIdx] = React.useState(5);
   const [isMobile, setIsMobile] = useState(false);
   const [activePoint, setActivePoint] = useState<Observation | null>(null);
@@ -244,13 +245,18 @@ export default function IndicatorChart({ indicator, isMaster, syncDate, onSyncDa
     <ReferenceLine x={syncPoint.date} stroke="rgba(251,191,36,0.7)" strokeWidth={1.5} strokeDasharray="4 2" />
   ) : null;
 
-  // 이상탐지 하이라이트 (빨간 세로선)
+  // 이상탐지 하이라이트 — 선택되지 않은 날짜: 연한 점선
   const anomalyLines = anomalyDates && anomalyDates.size > 0
     ? chartData
-        .filter(d => anomalyDates.has(d.date))
+        .filter(d => anomalyDates.has(d.date) && d.date !== selectedAnomalyDate)
         .map(d => (
-          <ReferenceLine key={`anomaly-${d.date}`} x={d.date} stroke="rgba(239,68,68,0.55)" strokeWidth={1.5} strokeDasharray="3 2" />
+          <ReferenceLine key={`anomaly-${d.date}`} x={d.date} stroke="rgba(239,68,68,0.4)" strokeWidth={1.5} strokeDasharray="3 2" />
         ))
+    : null;
+
+  // 선택된 이상탐지 포인트: 굵은 실선 + 반투명 배경
+  const selectedAnomalyLine = selectedAnomalyDate && chartData.some(d => d.date === selectedAnomalyDate)
+    ? <ReferenceLine x={selectedAnomalyDate} stroke="#ef4444" strokeWidth={2.5} label={{ value: "!", position: "insideTopRight", fill: "#ef4444", fontSize: 11 }} />
     : null;
 
   const axis = (
@@ -285,6 +291,7 @@ export default function IndicatorChart({ indicator, isMaster, syncDate, onSyncDa
           {axis}
           <ReferenceLine y={0} stroke="#374151" strokeDasharray="3 3" />
           {anomalyLines}
+          {selectedAnomalyLine}
           {syncLine}
           {cursorLine}
           <Area
@@ -306,6 +313,7 @@ export default function IndicatorChart({ indicator, isMaster, syncDate, onSyncDa
           {axis}
           <ReferenceLine y={0} stroke="#374151" />
           {anomalyLines}
+          {selectedAnomalyLine}
           {syncLine}
           {cursorLine}
           <Bar dataKey="value" fill={indicator.color} radius={[2, 2, 0, 0]} isAnimationActive={false} activeBar={false} />
@@ -316,6 +324,7 @@ export default function IndicatorChart({ indicator, isMaster, syncDate, onSyncDa
       <LineChart {...sharedProps}>
         {axis}
         {anomalyLines}
+        {selectedAnomalyLine}
         {syncLine}
         {cursorLine}
         <Line
