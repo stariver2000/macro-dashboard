@@ -96,6 +96,7 @@ export default function IndicatorChart({ indicator, isMaster, syncDate, onSyncDa
   const [periodIdx, setPeriodIdx] = React.useState(5);
   const [isMobile, setIsMobile] = useState(false);
   const [activePoint, setActivePoint] = useState<Observation | null>(null);
+  const [localOverride, setLocalOverride] = useState(false);
 
   const chartRef = useRef<HTMLDivElement>(null);
   // 모바일: 롱프레스 타이머
@@ -103,6 +104,10 @@ export default function IndicatorChart({ indicator, isMaster, syncDate, onSyncDa
   const isLongPress = useRef(false);
   // 데스크탑: 마우스 클릭 여부
   const isPressing = useRef(false);
+  // 동기화 로컬 오버라이드 관리용 ref
+  const localOverrideRef = useRef(false);
+  const didMove = useRef(false);
+  const wasOverrideBeforePress = useRef(false);
 
   useEffect(() => {
     setIsMobile(window.innerWidth < 768);
@@ -134,6 +139,13 @@ export default function IndicatorChart({ indicator, isMaster, syncDate, onSyncDa
       onSyncDate(activePoint ? activePoint.date : null);
     }
   }, [isMaster, activePoint, onSyncDate]);
+
+  useEffect(() => {
+    if (!syncDate) {
+      localOverrideRef.current = false;
+      setLocalOverride(false);
+    }
+  }, [syncDate]);
 
   // x축 시각적 연장 (합성 오늘 포인트)
   const today = new Date().toISOString().slice(0, 10);
@@ -361,10 +373,10 @@ export default function IndicatorChart({ indicator, isMaster, syncDate, onSyncDa
         {syncDate && !isMaster ? (
           syncPoint ? (
             <span className="text-amber-400">
-              {formatDateKorean(syncPoint.date)} · {syncPoint.value.toFixed(2)} {indicator.unit}
+              {formatDateKorean(syncDate!)} · {syncPoint.value.toFixed(2)} {indicator.unit}
             </span>
           ) : (
-            <span className="text-gray-500">NaN 날짜 없음.</span>
+            <span className="text-gray-500">날짜 없음</span>
           )
         ) : activePoint ? (
           <span className="text-gray-400">
