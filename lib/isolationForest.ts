@@ -35,6 +35,12 @@ export interface CausalEdge {
   fStat: number;
 }
 
+export interface LatestScore {
+  date: string;
+  score: number;
+  isAnomaly: boolean;
+}
+
 export interface AnomalyReport {
   scores: number[];
   dates: string[];
@@ -42,7 +48,8 @@ export interface AnomalyReport {
   featureLabels: string[];
   causalEdges: CausalEdge[];
   resampledTo: "daily" | "monthly";
-  cvCoverage: number; // 0~1: out-of-sample로 채점된 포인트 비율
+  cvCoverage: number;
+  latestScore: LatestScore;
 }
 
 // ── Isolation Forest core ────────────────────────────────────────────────────
@@ -393,7 +400,7 @@ export function runAnomalyDetection(
     nEstimators   = 200,
     nFolds        = 5,
     subsampleSize = 256,
-    topK          = 10,
+    topK          = 100,
     threshold     = 0.6,
     nPermutations = 50,
     grangerLag    = 2,
@@ -479,6 +486,13 @@ export function runAnomalyDetection(
     grangerLag
   );
 
+  const latestIdx = n - 1;
+  const latestScore: LatestScore = {
+    date:      alignedData[latestIdx].date,
+    score:     scores[latestIdx],
+    isAnomaly: scores[latestIdx] >= threshold,
+  };
+
   return {
     scores,
     dates:         alignedData.map(d => d.date),
@@ -487,6 +501,7 @@ export function runAnomalyDetection(
     causalEdges,
     resampledTo:   alignMode,
     cvCoverage,
+    latestScore,
   };
 }
 

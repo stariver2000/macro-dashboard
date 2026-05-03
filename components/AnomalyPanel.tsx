@@ -6,7 +6,7 @@ import {
   XAxis, YAxis, ResponsiveContainer, ReferenceLine, Cell,
 } from "recharts";
 import { Indicator } from "@/lib/indicators";
-import { runAnomalyDetection, alignSeries, AnomalyReport, CausalEdge, AlignMode } from "@/lib/isolationForest";
+import { runAnomalyDetection, alignSeries, AnomalyReport, CausalEdge, AlignMode, LatestScore } from "@/lib/isolationForest";
 
 interface Props {
   selectedIds:    string[];
@@ -287,6 +287,37 @@ export default function AnomalyPanel({ selectedIds, allIndicators, onAnomalyDate
         {/* ── 탭 1: 이상탐지 ──────────────────────────────────────── */}
         {report && activeTab === "이상탐지" && (
           <div className="space-y-4">
+            {/* 최근 날짜 이상 점수 — 항상 상단 고정 */}
+            <div className={`rounded-lg px-3 py-2.5 border ${
+              report.latestScore.isAnomaly
+                ? "bg-red-950/50 border-red-700/60"
+                : "bg-gray-800 border-gray-700"
+            }`}>
+              <p className="text-xs text-gray-400 mb-1">최근 분석 시점</p>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-mono text-gray-200">{report.latestScore.date}</span>
+                <div className="flex items-center gap-2">
+                  <div className="w-20 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                    <div className="h-full rounded-full transition-all"
+                      style={{
+                        width: `${Math.min(report.latestScore.score * 100, 100)}%`,
+                        backgroundColor: report.latestScore.isAnomaly ? "#ef4444" : "#6b7280",
+                      }} />
+                  </div>
+                  <span className={`text-xs font-mono w-12 text-right ${report.latestScore.isAnomaly ? "text-red-400" : "text-gray-400"}`}>
+                    {report.latestScore.score.toFixed(3)}
+                  </span>
+                  <span className={`text-xs px-1.5 py-0.5 rounded ${
+                    report.latestScore.isAnomaly
+                      ? "bg-red-800/70 text-red-300"
+                      : "bg-gray-700 text-gray-400"
+                  }`}>
+                    {report.latestScore.isAnomaly ? "이상" : "정상"}
+                  </span>
+                </div>
+              </div>
+            </div>
+
             <div>
               <p className="text-xs text-gray-400 mb-1.5">이상 점수 추이</p>
               <div className="h-28">
