@@ -39,6 +39,8 @@ export interface LatestScore {
   date: string;
   score: number;
   isAnomaly: boolean;
+  rank: number;      // 전체 포인트 중 이상 점수 순위 (1 = 가장 이상)
+  totalPoints: number;
 }
 
 export interface AnomalyReport {
@@ -486,11 +488,14 @@ export function runAnomalyDetection(
     grangerLag
   );
 
-  const latestIdx = n - 1;
+  const latestIdx  = n - 1;
+  const latestRank = scores.filter(s => s > scores[latestIdx]).length + 1;
   const latestScore: LatestScore = {
-    date:      alignedData[latestIdx].date,
-    score:     scores[latestIdx],
-    isAnomaly: scores[latestIdx] >= threshold,
+    date:        alignedData[latestIdx].date,
+    score:       scores[latestIdx],
+    isAnomaly:   scores[latestIdx] >= threshold,
+    rank:        latestRank,
+    totalPoints: n,
   };
 
   return {

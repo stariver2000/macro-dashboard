@@ -293,7 +293,12 @@ export default function AnomalyPanel({ selectedIds, allIndicators, onAnomalyDate
                 ? "bg-red-950/50 border-red-700/60"
                 : "bg-gray-800 border-gray-700"
             }`}>
-              <p className="text-xs text-gray-400 mb-1">최근 분석 시점</p>
+              <div className="flex items-center justify-between mb-1.5">
+                <p className="text-xs text-gray-400">최근 분석 시점</p>
+                <span className={`text-xs font-bold ${report.latestScore.isAnomaly ? "text-red-400" : "text-gray-400"}`}>
+                  전체 {report.latestScore.totalPoints}개 중 {report.latestScore.rank}번째
+                </span>
+              </div>
               <div className="flex items-center justify-between">
                 <span className="text-xs font-mono text-gray-200">{report.latestScore.date}</span>
                 <div className="flex items-center gap-2">

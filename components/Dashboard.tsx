@@ -265,18 +265,28 @@ export default function Dashboard() {
                       ))}
                     </div>
                     {anomalyMode && (
-                      <label
+                      <button
                         onMouseDown={(e) => e.stopPropagation()}
-                        className="flex items-center gap-1.5 cursor-pointer select-none"
+                        onClick={() => toggleAnomalySelect(ind.id)}
+                        className={`flex items-center gap-1.5 px-2 py-1 rounded-md border text-xs font-medium transition-all select-none ${
+                          selectedForAnomaly.has(ind.id)
+                            ? "bg-red-700 border-red-600 text-white"
+                            : "bg-gray-800 border-gray-600 text-gray-400 hover:border-red-600 hover:text-red-400"
+                        }`}
                       >
-                        <input
-                          type="checkbox"
-                          checked={selectedForAnomaly.has(ind.id)}
-                          onChange={() => toggleAnomalySelect(ind.id)}
-                          className="w-3.5 h-3.5 accent-red-500 cursor-pointer"
-                        />
-                        <span className="text-xs text-gray-400">선택</span>
-                      </label>
+                        <span className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 transition-all ${
+                          selectedForAnomaly.has(ind.id)
+                            ? "bg-white border-white"
+                            : "border-gray-500"
+                        }`}>
+                          {selectedForAnomaly.has(ind.id) && (
+                            <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
+                              <path d="M1 4L3.5 6.5L9 1" stroke="#ef4444" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                            </svg>
+                          )}
+                        </span>
+                        탐지
+                      </button>
                     )}
                   </div>
                   <button
