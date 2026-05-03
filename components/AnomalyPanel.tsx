@@ -100,17 +100,22 @@ function CausalSection({ edges, names }: { edges: CausalEdge[]; names: string[] 
 // ── Component ────────────────────────────────────────────────────────────────
 export default function AnomalyPanel({ selectedIds, allIndicators, onAnomalyDates, onClose }: Props) {
   const [periodIdx, setPeriodIdx] = useState(3);
+  const [useCustom, setUseCustom] = useState(false);
+  const [customStart, setCustomStart] = useState(() => startOf(10));
+  const [customEnd,   setCustomEnd]   = useState(() => new Date().toISOString().slice(0, 10));
   const [report, setReport]       = useState<AnomalyReport | null>(null);
   const [selIdx, setSelIdx]       = useState(0);
   const [isRunning, setIsRunning] = useState(false);
   const [alignedCount, setAlignedCount] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>("이상탐지");
 
+  const today = new Date().toISOString().slice(0, 10);
   const selectedInds = allIndicators.filter(ind => selectedIds.includes(ind.id));
-  const start = startOf(PERIODS[periodIdx].years);
+  const start = useCustom ? customStart : startOf(PERIODS[periodIdx].years);
+  const end   = useCustom ? customEnd   : today;
 
   const { data: multiData, isLoading } = useQuery({
-    queryKey: ["anomaly-data", [...selectedIds].sort(), start],
+    queryKey: ["anomaly-data", [...selectedIds].sort(), start, end],
     queryFn:  () => Promise.all(selectedInds.map(ind => fetchInd(ind, start))),
     enabled:  selectedIds.length >= 2,
     staleTime: 24 * 60 * 60 * 1000,
@@ -122,7 +127,8 @@ export default function AnomalyPanel({ selectedIds, allIndicators, onAnomalyDate
     setTimeout(() => {
       const series = selectedInds.map((ind, i) => ({
         name: ind.name,
-        observations: multiData[i]?.observations ?? [],
+        // 커스텀 종료일 적용: end 이후 데이터 제외
+        observations: (multiData[i]?.observations ?? []).filter(o => o.date <= end),
       }));
       const aligned = alignSeries(series);
       setAlignedCount(aligned.length);
@@ -177,22 +183,51 @@ export default function AnomalyPanel({ selectedIds, allIndicators, onAnomalyDate
           </div>
         )}
 
-        {/* 기간 + 버튼 */}
-        <div className="flex items-center gap-2">
-          <div className="flex gap-1">
+        {/* 기간 선택 */}
+        <div className="space-y-2">
+          <div className="flex gap-1 flex-wrap">
             {PERIODS.map((p, i) => (
-              <button key={p.label} onClick={() => { setPeriodIdx(i); setReport(null); setAlignedCount(null); }}
-                className={`text-xs px-2 py-1 rounded transition-colors ${i === periodIdx ? "bg-gray-600 text-white" : "text-gray-500 hover:text-gray-300"}`}>
+              <button key={p.label}
+                onClick={() => { setUseCustom(false); setPeriodIdx(i); setReport(null); setAlignedCount(null); }}
+                className={`text-xs px-2 py-1 rounded transition-colors ${!useCustom && i === periodIdx ? "bg-gray-600 text-white" : "text-gray-500 hover:text-gray-300"}`}>
                 {p.label}
               </button>
             ))}
+            <button
+              onClick={() => { setUseCustom(true); setReport(null); setAlignedCount(null); }}
+              className={`text-xs px-2 py-1 rounded transition-colors ${useCustom ? "bg-indigo-700 text-white" : "text-gray-500 hover:text-gray-300"}`}>
+              직접 설정
+            </button>
           </div>
-          <button onClick={runAnalysis}
-            disabled={selectedIds.length < 2 || isLoading || isRunning}
-            className="flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors bg-indigo-600 hover:bg-indigo-500 text-white disabled:opacity-40 disabled:cursor-not-allowed">
-            {isRunning ? "분석 중..." : isLoading ? "로딩 중..." : "분석 시작"}
-          </button>
+
+          {useCustom && (
+            <div className="flex items-center gap-2">
+              <input
+                type="date"
+                value={customStart}
+                max={customEnd}
+                onChange={e => { setCustomStart(e.target.value); setReport(null); setAlignedCount(null); }}
+                className="flex-1 text-xs bg-gray-800 border border-gray-700 rounded px-2 py-1 text-gray-200 [color-scheme:dark]"
+              />
+              <span className="text-gray-600 text-xs flex-shrink-0">~</span>
+              <input
+                type="date"
+                value={customEnd}
+                min={customStart}
+                max={today}
+                onChange={e => { setCustomEnd(e.target.value); setReport(null); setAlignedCount(null); }}
+                className="flex-1 text-xs bg-gray-800 border border-gray-700 rounded px-2 py-1 text-gray-200 [color-scheme:dark]"
+              />
+            </div>
+          )}
         </div>
+
+        {/* 분석 버튼 */}
+        <button onClick={runAnalysis}
+          disabled={selectedIds.length < 2 || isLoading || isRunning || (useCustom && customStart >= customEnd)}
+          className="w-full py-1.5 rounded-lg text-xs font-medium transition-colors bg-indigo-600 hover:bg-indigo-500 text-white disabled:opacity-40 disabled:cursor-not-allowed">
+          {isRunning ? "분석 중..." : isLoading ? "로딩 중..." : "분석 시작"}
+        </button>
 
         {alignedCount !== null && alignedCount < 10 && (
           <p className="text-xs text-amber-400">공통 날짜 {alignedCount}개 — 기간을 늘리거나 유사 빈도 지표로 조합하세요.</p>
