@@ -11,7 +11,8 @@ function downsample<T>(arr: T[], max: number): T[] {
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const symbol = searchParams.get("symbol");
-  const start = searchParams.get("start"); // YYYY-MM-DD
+  const start  = searchParams.get("start"); // YYYY-MM-DD
+  const raw    = searchParams.get("raw") === "true"; // 다운샘플 생략 (이상탐지용)
 
   if (!symbol) {
     return NextResponse.json({ error: "symbol parameter required" }, { status: 400 });
@@ -45,9 +46,7 @@ export async function GET(req: NextRequest) {
       }))
       .filter((o): o is { date: string; value: number } => o.value != null && !isNaN(o.value));
 
-    // 최대 1200포인트로 다운샘플링 (50년치 일별 ≈ 12500개 → 렌더 성능 확보)
-    const observations = downsample(all, 1200);
-
+    const observations = raw ? all : downsample(all, 1200);
     return NextResponse.json({ observations });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";

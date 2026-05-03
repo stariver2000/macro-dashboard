@@ -42,6 +42,7 @@ export interface AnomalyReport {
   featureLabels: string[];
   causalEdges: CausalEdge[];
   resampledTo: "daily" | "monthly";
+  cvCoverage: number; // 0~1: out-of-sample로 채점된 포인트 비율
 }
 
 // ── Isolation Forest core ────────────────────────────────────────────────────
@@ -81,6 +82,51 @@ function pathLength(tree: ITree, pt: number[], depth = 0): number {
 function makeScorer(trees: ITree[], sub: number) {
   return (pt: number[]) =>
     Math.pow(2, -(trees.reduce((s, t) => s + pathLength(t, pt), 0) / trees.length) / c(sub));
+}
+
+// ── Walk-Forward Cross-Validation ─────────────────────────────────────────────
+// 각 포인트를 해당 포인트 이전 데이터만으로 학습한 모델로 채점 (lookahead bias 제거)
+// 처음 minTrainRatio 구간은 full model 점수로 대체 (훈련 데이터 부족)
+function walkForwardCVScores(
+  normalized: number[][],
+  fullScores: number[],       // fallback: full model 점수
+  nEstimators: number,
+  sub: number,
+  nFolds: number
+): { scores: number[]; cvCoverage: number } {
+  const n = normalized.length;
+  const cvScores = fullScores.slice(); // 기본값: full model 점수
+  const minTrain  = Math.max(30, Math.floor(n * 0.4));
+  const remaining = n - minTrain;
+
+  if (remaining <= 0) return { scores: cvScores, cvCoverage: 0 };
+
+  const foldSize = Math.ceil(remaining / nFolds);
+  let cvCount = 0;
+
+  for (let fold = 0; fold < nFolds; fold++) {
+    const testStart = minTrain + fold * foldSize;
+    const testEnd   = Math.min(testStart + foldSize, n);
+    if (testStart >= n) break;
+
+    // 이 fold의 테스트 구간 이전 데이터만으로 학습
+    const trainData  = normalized.slice(0, testStart);
+    const actualSub  = Math.min(sub, trainData.length);
+    const maxDepth   = Math.ceil(Math.log2(Math.max(actualSub, 2)));
+
+    const foldTrees = Array.from({ length: nEstimators }, () => {
+      const idx = Array.from({ length: actualSub }, () => Math.floor(Math.random() * trainData.length));
+      return buildTree(idx.map(i => trainData[i]), maxDepth);
+    });
+    const foldScorer = makeScorer(foldTrees, actualSub);
+
+    for (let i = testStart; i < testEnd; i++) {
+      cvScores[i] = foldScorer(normalized[i]);
+      cvCount++;
+    }
+  }
+
+  return { scores: cvScores, cvCoverage: cvCount / n };
 }
 
 // ── Normalisation helpers ─────────────────────────────────────────────────────
@@ -332,17 +378,20 @@ export function runAnomalyDetection(
   alignedData: AlignedPoint[],
   indicatorNames: string[],
   options: {
-    nEstimators?:   number;
-    subsampleSize?: number;
-    topK?:          number;
-    threshold?:     number;
-    nPermutations?: number;
-    grangerLag?:    number;
-    alignMode?:     AlignMode;
+    nEstimators?:    number;
+    cvEstimators?:   number; // walk-forward fold당 트리 수 (기본 nEstimators/2)
+    nFolds?:         number;
+    subsampleSize?:  number;
+    topK?:           number;
+    threshold?:      number;
+    nPermutations?:  number;
+    grangerLag?:     number;
+    alignMode?:      AlignMode;
   } = {}
 ): AnomalyReport {
   const {
-    nEstimators   = 100,
+    nEstimators   = 200,
+    nFolds        = 5,
     subsampleSize = 256,
     topK          = 10,
     threshold     = 0.6,
@@ -350,6 +399,7 @@ export function runAnomalyDetection(
     grangerLag    = 2,
     alignMode     = "monthly",
   } = options;
+  const cvEstimators = options.cvEstimators ?? Math.max(50, Math.floor(nEstimators / 2));
 
   const nInd = indicatorNames.length;
   const n    = alignedData.length;
@@ -367,7 +417,7 @@ export function runAnomalyDetection(
   const { means, stds } = computeStats(raw);
   const norm = normalise(raw, means, stds);
 
-  // Train Isolation Forest
+  // 전체 데이터로 학습한 full model (SHAP·Recourse·Granger에 사용)
   const sub      = Math.min(subsampleSize, n);
   const maxDepth = Math.ceil(Math.log2(sub));
   const trees: ITree[] = Array.from({ length: nEstimators }, () => {
@@ -375,9 +425,13 @@ export function runAnomalyDetection(
     return buildTree(idx.map(i => norm[i]), maxDepth);
   });
   const score = makeScorer(trees, sub);
+  const fullScores = norm.map(score);
 
-  // Anomaly scores
-  const scores = norm.map(score);
+  // Walk-Forward CV: 과거 데이터만으로 학습해 lookahead bias 제거
+  // 처음 40% 구간은 훈련 데이터 부족으로 full model 점수 사용
+  const { scores, cvCoverage } = walkForwardCVScores(
+    norm, fullScores, cvEstimators, sub, nFolds
+  );
 
   // Select top-K anomalies above threshold
   const topIdxs = scores
@@ -432,6 +486,7 @@ export function runAnomalyDetection(
     featureLabels: indicatorNames,
     causalEdges,
     resampledTo:   alignMode,
+    cvCoverage,
   };
 }
 

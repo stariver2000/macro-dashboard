@@ -13,7 +13,8 @@ const FRED_BASE = "https://api.stlouisfed.org/fred/series/observations";
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const series = searchParams.get("series");
-  const start = searchParams.get("start"); // YYYY-MM-DD
+  const start  = searchParams.get("start"); // YYYY-MM-DD
+  const raw    = searchParams.get("raw") === "true"; // 다운샘플 생략 (이상탐지용)
 
   const apiKey = process.env.FRED_API_KEY;
   if (!apiKey) {
@@ -43,7 +44,7 @@ export async function GET(req: NextRequest) {
         value: parseFloat(o.value),
       }));
 
-    return NextResponse.json({ observations: downsample(observations, 1200) });
+    return NextResponse.json({ observations: raw ? observations : downsample(observations, 1200) });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });

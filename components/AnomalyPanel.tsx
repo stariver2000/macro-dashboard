@@ -36,9 +36,9 @@ function startOf(years: number) {
 }
 
 function fetchInd(ind: Indicator, start: string): Promise<{ observations: Obs[] }> {
-  if (ind.yahooSymbol) return fetch(`/api/yahoo?symbol=${encodeURIComponent(ind.yahooSymbol)}&start=${start}`).then(r => r.json());
+  if (ind.yahooSymbol) return fetch(`/api/yahoo?symbol=${encodeURIComponent(ind.yahooSymbol)}&start=${start}&raw=true`).then(r => r.json());
   if (ind.shillerKey)  return fetch(`/api/shiller?start=${start}`).then(r => r.json());
-  return fetch(`/api/fred?series=${ind.fredSeries}&start=${start}`).then(r => r.json());
+  return fetch(`/api/fred?series=${ind.fredSeries}&start=${start}&raw=true`).then(r => r.json());
 }
 
 // ── Strength bar helper ──────────────────────────────────────────────────────
@@ -256,7 +256,8 @@ export default function AnomalyPanel({ selectedIds, allIndicators, onAnomalyDate
         )}
         {alignedCount !== null && alignedCount >= 10 && !isRunning && report && (
           <p className="text-xs text-gray-600">
-            {report.resampledTo === "monthly" ? "월별" : "일별"} 리샘플링 · {alignedCount}개 포인트
+            {report.resampledTo === "monthly" ? "월별" : "일별"} · {alignedCount}개 포인트
+            {" "}· Walk-Forward CV {Math.round(report.cvCoverage * 100)}% 적용
           </p>
         )}
       </div>
