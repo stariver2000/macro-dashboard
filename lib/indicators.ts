@@ -138,8 +138,8 @@ export const AVAILABLE_INDICATORS: Indicator[] = [
   {
     id: "vix",
     name: "VIX (공포지수)",
-    description: "CBOE 변동성지수 - 시장 불안 심리 지표",
-    fredSeries: "VIXCLS",
+    description: "CBOE 변동성지수 - 시장 불안 심리 지표 (Yahoo Finance, 15분 지연)",
+    yahooSymbol: "^VIX",
     unit: "pt",
     category: "market",
     chartType: "area",

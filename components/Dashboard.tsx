@@ -4,17 +4,38 @@ import { GridLayout, LayoutItem, Layout, verticalCompactor } from "react-grid-la
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
 
-import { AVAILABLE_INDICATORS, DEFAULT_INDICATORS } from "@/lib/indicators";
+import { AVAILABLE_INDICATORS, DEFAULT_INDICATORS, Indicator } from "@/lib/indicators";
 import IndicatorChart from "./IndicatorChart";
 import AddIndicatorModal from "./AddIndicatorModal";
+import AddStockModal from "./AddStockModal";
 import AnomalyPanel from "./AnomalyPanel";
 import Clock from "./Clock";
+import NavBar from "./NavBar";
 
 const COLS = 12;
 const ITEM_W = 4;
 const ITEM_H = 7;
 const COLS_PER_ROW = COLS / ITEM_W; // 3
 const ROW_HEIGHT = 30;
+
+const STOCK_COLORS = [
+  "#10b981", "#6366f1", "#f59e0b", "#ec4899",
+  "#14b8a6", "#f97316", "#a855f7", "#22c55e",
+  "#3b82f6", "#84cc16",
+];
+
+function makeStockIndicator(ticker: string, colorIndex: number): Indicator {
+  return {
+    id: `stock:${ticker}`,
+    name: ticker,
+    description: `${ticker} (Yahoo Finance)`,
+    yahooSymbol: ticker,
+    unit: "USD",
+    category: "market",
+    chartType: "line",
+    color: STOCK_COLORS[colorIndex % STOCK_COLORS.length],
+  };
+}
 
 function makeDefaultLayout(ids: string[]): LayoutItem[] {
   return ids.map((id, i) => ({
@@ -28,7 +49,6 @@ function makeDefaultLayout(ids: string[]): LayoutItem[] {
   }));
 }
 
-/** 현재 레이아웃에서 다음 슬롯 위치를 계산 (행 우선 순서) */
 function nextSlot(layout: LayoutItem[]): { x: number; y: number } {
   if (layout.length === 0) return { x: 0, y: 0 };
   const maxY = Math.max(...layout.map((l) => l.y));
@@ -44,14 +64,16 @@ function nextSlot(layout: LayoutItem[]): { x: number; y: number } {
 
 const STORAGE_KEY = "macro-dashboard-layout";
 const STORAGE_IDS_KEY = "macro-dashboard-indicators";
+const STORAGE_STOCKS_KEY = "macro-dashboard-stocks";
 
 export default function Dashboard() {
-  // 서버/클라이언트 hydration 불일치를 막기 위해 localStorage는 useEffect에서만 읽음
   const [indicatorIds, setIndicatorIds] = useState<string[]>(DEFAULT_INDICATORS);
+  const [stockTickers, setStockTickers] = useState<string[]>([]);
   const [layout, setLayout] = useState<LayoutItem[]>(makeDefaultLayout(DEFAULT_INDICATORS));
   const [mounted, setMounted] = useState(false);
 
   const [showModal, setShowModal] = useState(false);
+  const [showStockModal, setShowStockModal] = useState(false);
   const [containerWidth, setContainerWidth] = useState(1200);
   const [syncMode, setSyncMode] = useState(false);
   const [syncDate, setSyncDate] = useState<string | null>(null);
@@ -60,23 +82,27 @@ export default function Dashboard() {
   const [anomalyDates, setAnomalyDates] = useState<Set<string>>(new Set());
   const [selectedAnomalyDate, setSelectedAnomalyDate] = useState<string | null>(null);
 
-  // localStorage에서 저장된 상태 복원 (클라이언트 전용)
   useEffect(() => {
     try {
       const savedIds = localStorage.getItem(STORAGE_IDS_KEY);
       const savedLayout = localStorage.getItem(STORAGE_KEY);
+      const savedStocks = localStorage.getItem(STORAGE_STOCKS_KEY);
+      if (savedStocks) {
+        const stocks = JSON.parse(savedStocks) as string[];
+        if (Array.isArray(stocks)) setStockTickers(stocks);
+      }
       if (savedIds) {
         const ids = JSON.parse(savedIds) as string[];
         setIndicatorIds(ids);
         setLayout(savedLayout ? JSON.parse(savedLayout) : makeDefaultLayout(ids));
       }
     } catch {
-      // 파싱 실패시 기본값 유지
+      // 기본값 유지
     }
     setMounted(true);
   }, []);
 
-  const PANEL_WIDTH = 416; // 26rem
+  const PANEL_WIDTH = 416;
 
   useEffect(() => {
     if (!mounted) return;
@@ -91,7 +117,7 @@ export default function Dashboard() {
   }, []);
 
   const toggleAnomalyMode = useCallback(() => {
-    setAnomalyMode(prev => {
+    setAnomalyMode((prev) => {
       if (prev) {
         setSelectedForAnomaly(new Set());
         setAnomalyDates(new Set());
@@ -102,7 +128,7 @@ export default function Dashboard() {
   }, []);
 
   const toggleAnomalySelect = useCallback((id: string) => {
-    setSelectedForAnomaly(prev => {
+    setSelectedForAnomaly((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
@@ -171,9 +197,59 @@ export default function Dashboard() {
     [indicatorIds, layout]
   );
 
+  const addStock = useCallback(
+    (ticker: string) => {
+      const t = ticker.trim().toUpperCase();
+      if (!t || stockTickers.includes(t)) return;
+      const newTickers = [...stockTickers, t];
+      setStockTickers(newTickers);
+      localStorage.setItem(STORAGE_STOCKS_KEY, JSON.stringify(newTickers));
+
+      const id = `stock:${t}`;
+      const { x, y } = nextSlot(layout);
+      const newLayout: LayoutItem[] = [
+        ...layout,
+        { i: id, x, y, w: ITEM_W, h: ITEM_H, minW: 3, minH: 5 },
+      ];
+      setLayout(newLayout);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(newLayout));
+      setShowStockModal(false);
+    },
+    [stockTickers, layout]
+  );
+
+  const removeStock = useCallback(
+    (ticker: string) => {
+      const id = `stock:${ticker}`;
+      const newTickers = stockTickers.filter((t) => t !== ticker);
+      const newLayout = layout.filter((l) => l.i !== id);
+      setStockTickers(newTickers);
+      setLayout(newLayout);
+      localStorage.setItem(STORAGE_STOCKS_KEY, JSON.stringify(newTickers));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(newLayout));
+    },
+    [stockTickers, layout]
+  );
+
   const indicators = indicatorIds
     .map((id) => AVAILABLE_INDICATORS.find((ind) => ind.id === id))
     .filter(Boolean) as typeof AVAILABLE_INDICATORS;
+
+  const stockIndicators = stockTickers.map((ticker, i) => makeStockIndicator(ticker, i));
+
+  // 그리드에 표시할 모든 아이템 (거시지표 + 주식 종목)
+  type GridItem =
+    | { kind: "indicator"; indicator: Indicator }
+    | { kind: "stock"; indicator: Indicator; ticker: string };
+
+  const allItems: GridItem[] = [
+    ...indicators.map((ind) => ({ kind: "indicator" as const, indicator: ind })),
+    ...stockIndicators.map((ind, i) => ({
+      kind: "stock" as const,
+      indicator: ind,
+      ticker: stockTickers[i],
+    })),
+  ];
 
   if (!mounted) {
     return (
@@ -185,11 +261,13 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-gray-950 text-white">
-      {/* 네비 */}
       <header className="sticky top-0 z-40 bg-gray-950/90 backdrop-blur border-b border-gray-800 px-4 py-3 flex items-center justify-between">
-        <div>
-          <h1 className="text-base font-bold tracking-tight">Macro Dashboard</h1>
-          <p className="text-xs text-gray-500">드래그로 위젯 배치 · 우상단 × 로 제거</p>
+        <div className="flex items-center gap-4">
+          <div>
+            <h1 className="text-base font-bold tracking-tight">Macro Dashboard</h1>
+            <p className="text-xs text-gray-500">드래그로 위젯 배치 · 우상단 × 로 제거</p>
+          </div>
+          <NavBar />
         </div>
         <div className="flex items-center gap-4">
           <Clock />
@@ -217,6 +295,12 @@ export default function Dashboard() {
               {syncMode ? "S&P 동기화 ON" : "S&P 동기화"}
             </button>
             <button
+              onClick={() => setShowStockModal(true)}
+              className="text-xs bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-lg transition-colors font-medium"
+            >
+              + 종목 추가
+            </button>
+            <button
               onClick={() => setShowModal(true)}
               className="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg transition-colors font-medium"
             >
@@ -226,20 +310,26 @@ export default function Dashboard() {
         </div>
       </header>
 
-      {/* 그리드 */}
       <main className={`p-6 transition-[margin] duration-200 ${anomalyMode ? "mr-[26rem]" : ""}`}>
-        {indicators.length === 0 ? (
+        {allItems.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-96 gap-4">
             <p className="text-gray-500">표시할 지표가 없습니다.</p>
-            <button
-              onClick={() => setShowModal(true)}
-              className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg text-sm"
-            >
-              지표 추가하기
-            </button>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowStockModal(true)}
+                className="bg-emerald-700 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm"
+              >
+                종목 추가하기
+              </button>
+              <button
+                onClick={() => setShowModal(true)}
+                className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg text-sm"
+              >
+                지표 추가하기
+              </button>
+            </div>
           </div>
         ) : (
-          /* 드래그앤드롭 그리드: 행 우선으로 슬롯이 채워짐 */
           <GridLayout
             layout={layout}
             gridConfig={{ cols: COLS, rowHeight: ROW_HEIGHT }}
@@ -248,65 +338,86 @@ export default function Dashboard() {
             width={containerWidth}
             onLayoutChange={saveLayout}
           >
-            {indicators.map((ind) => (
-              <div
-                key={ind.id}
-                className={`bg-gray-900 border rounded-xl p-4 flex flex-col overflow-hidden transition-colors ${
-                  anomalyMode && selectedForAnomaly.has(ind.id)
-                    ? "border-red-700/70"
-                    : "border-gray-800"
-                }`}
-              >
-                <div className="drag-handle flex items-center justify-between cursor-grab active:cursor-grabbing mb-1 flex-shrink-0">
-                  <div className="flex items-center gap-2">
-                    <div className="flex gap-0.5">
-                      {[0, 1, 2].map((i) => (
-                        <div key={i} className="w-0.5 h-3 bg-gray-600 rounded" />
-                      ))}
-                    </div>
-                    {anomalyMode && (
-                      <button
-                        onMouseDown={(e) => e.stopPropagation()}
-                        onClick={() => toggleAnomalySelect(ind.id)}
-                        className={`flex items-center gap-1.5 px-2 py-1 rounded-md border text-xs font-medium transition-all select-none ${
-                          selectedForAnomaly.has(ind.id)
-                            ? "bg-red-700 border-red-600 text-white"
-                            : "bg-gray-800 border-gray-600 text-gray-400 hover:border-red-600 hover:text-red-400"
-                        }`}
-                      >
-                        <span className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 transition-all ${
-                          selectedForAnomaly.has(ind.id)
-                            ? "bg-white border-white"
-                            : "border-gray-500"
-                        }`}>
-                          {selectedForAnomaly.has(ind.id) && (
-                            <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
-                              <path d="M1 4L3.5 6.5L9 1" stroke="#ef4444" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-                            </svg>
-                          )}
+            {allItems.map(({ indicator: ind, kind, ...rest }) => {
+              const ticker = kind === "stock" ? (rest as { ticker: string }).ticker : "";
+              return (
+                <div
+                  key={ind.id}
+                  className={`bg-gray-900 border rounded-xl p-4 flex flex-col overflow-hidden transition-colors ${
+                    anomalyMode && selectedForAnomaly.has(ind.id)
+                      ? "border-red-700/70"
+                      : kind === "stock"
+                      ? "border-gray-700"
+                      : "border-gray-800"
+                  }`}
+                >
+                  <div className="drag-handle flex items-center justify-between cursor-grab active:cursor-grabbing mb-1 flex-shrink-0">
+                    <div className="flex items-center gap-2">
+                      <div className="flex gap-0.5">
+                        {[0, 1, 2].map((i) => (
+                          <div key={i} className="w-0.5 h-3 bg-gray-600 rounded" />
+                        ))}
+                      </div>
+                      {/* 주식 종목 뱃지 */}
+                      {kind === "stock" && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-900/40 text-emerald-500 border border-emerald-800/50 leading-none">
+                          주식
                         </span>
-                        탐지
-                      </button>
-                    )}
+                      )}
+                      {anomalyMode && (
+                        <button
+                          onMouseDown={(e) => e.stopPropagation()}
+                          onClick={() => toggleAnomalySelect(ind.id)}
+                          className={`flex items-center gap-1.5 px-2 py-1 rounded-md border text-xs font-medium transition-all select-none ${
+                            selectedForAnomaly.has(ind.id)
+                              ? "bg-red-700 border-red-600 text-white"
+                              : "bg-gray-800 border-gray-600 text-gray-400 hover:border-red-600 hover:text-red-400"
+                          }`}
+                        >
+                          <span
+                            className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 transition-all ${
+                              selectedForAnomaly.has(ind.id)
+                                ? "bg-white border-white"
+                                : "border-gray-500"
+                            }`}
+                          >
+                            {selectedForAnomaly.has(ind.id) && (
+                              <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
+                                <path
+                                  d="M1 4L3.5 6.5L9 1"
+                                  stroke="#ef4444"
+                                  strokeWidth="1.8"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                />
+                              </svg>
+                            )}
+                          </span>
+                          탐지
+                        </button>
+                      )}
+                    </div>
+                    <button
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onClick={() =>
+                        kind === "stock" ? removeStock(ticker) : removeIndicator(ind.id)
+                      }
+                      className="text-gray-600 hover:text-gray-300 text-lg leading-none transition-colors"
+                    >
+                      ×
+                    </button>
                   </div>
-                  <button
-                    onMouseDown={(e) => e.stopPropagation()}
-                    onClick={() => removeIndicator(ind.id)}
-                    className="text-gray-600 hover:text-gray-300 text-lg leading-none transition-colors"
-                  >
-                    ×
-                  </button>
+                  <IndicatorChart
+                    indicator={ind}
+                    isMaster={syncMode && ind.id === "sp500"}
+                    syncDate={syncMode ? syncDate : null}
+                    onSyncDate={syncMode && ind.id === "sp500" ? handleSyncDate : undefined}
+                    anomalyDates={anomalyDates.size > 0 ? anomalyDates : undefined}
+                    selectedAnomalyDate={selectedAnomalyDate ?? undefined}
+                  />
                 </div>
-                <IndicatorChart
-                  indicator={ind}
-                  isMaster={syncMode && ind.id === "sp500"}
-                  syncDate={syncMode ? syncDate : null}
-                  onSyncDate={syncMode && ind.id === "sp500" ? handleSyncDate : undefined}
-                  anomalyDates={anomalyDates.size > 0 ? anomalyDates : undefined}
-                  selectedAnomalyDate={selectedAnomalyDate ?? undefined}
-                />
-              </div>
-            ))}
+              );
+            })}
           </GridLayout>
         )}
       </main>
@@ -319,10 +430,18 @@ export default function Dashboard() {
         />
       )}
 
+      {showStockModal && (
+        <AddStockModal
+          activeTickers={stockTickers}
+          onAdd={addStock}
+          onClose={() => setShowStockModal(false)}
+        />
+      )}
+
       {anomalyMode && (
         <AnomalyPanel
           selectedIds={[...selectedForAnomaly]}
-          allIndicators={indicators}
+          allIndicators={[...indicators, ...stockIndicators]}
           onAnomalyDates={setAnomalyDates}
           onSelectAnomaly={setSelectedAnomalyDate}
           onClose={toggleAnomalyMode}
