@@ -1,5 +1,5 @@
-import EconomicCalendar from "@/components/EconomicCalendar";
+import RiskCalendar from "@/components/RiskCalendar";
 
 export default function CalendarPage() {
-  return <EconomicCalendar />;
+  return <RiskCalendar />;
 }
