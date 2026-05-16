@@ -102,7 +102,7 @@ export default function Dashboard() {
             ...item,
             minW: Math.max(item.minW ?? 0, 3),
             minH: Math.max(item.minH ?? 0, 5),
-            h: Math.max(item.h, item.minH ?? 5),
+            h: Math.max(item.h, ITEM_H),
           }));
           setLayout(parsed);
         } else {
@@ -187,10 +187,10 @@ export default function Dashboard() {
       ...item,
       minW: Math.max(item.minW ?? 0, 3),
       minH: Math.max(item.minH ?? 0, 5),
-      h: Math.max(item.h, item.minH ?? 5),
+      // verticalCompactor가 h를 줄이는 버그를 차단: 항상 ITEM_H(7) 이상 강제
+      h: Math.max(item.h, ITEM_H),
     }));
     setLayout(mutable);
-    // 마운트 직후 자동 compaction 결과는 저장하지 않음 (주식 카드 쪼그라드는 버그 방지)
     if (canSaveLayout.current) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(mutable));
     }
