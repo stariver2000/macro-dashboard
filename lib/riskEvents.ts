@@ -417,7 +417,7 @@ export const RISK_EVENTS: RiskEvent[] = [
   { id:"googl_q1",      date:"2026-05-05", title:"알파벳 실적 (Q1 2026)", shortTitle:"GOOGL 실적",  category:"earnings", baseScore:4, icon:"💰", time:"장 마감 후", description:"검색 광고·YouTube·Google Cloud 성장률.", sectors:["광고","클라우드"], isEstimate:true },
   { id:"cpi_2026_05",   date:"2026-05-13", title:"CPI (4월)", shortTitle:"CPI",                    category:"macro",    baseScore:5, icon:"📈", time:"08:30 ET", description:"4월 소비자물가지수.", sectors:["전체 시장","채권","성장주"], isEstimate:true },
   { id:"opex_2026_05",  date:"2026-05-15", title:"월간 옵션 만기", shortTitle:"OpEx",                category:"options",  baseScore:3, icon:"📉", description:"5월 월간 옵션 만기일.", sectors:["전체 시장"], isEstimate:false },
-  { id:"nvda_q1",       date:"2026-05-27", title:"엔비디아 실적 (Q1 FY2027)", shortTitle:"NVDA 실적", category:"earnings", baseScore:5, icon:"💰", time:"장 마감 후", description:"AI GPU 수요, Blackwell 공급 현황, 데이터센터 매출 성장률이 AI 테마 전체 방향을 좌우.", sectors:["반도체","AI"], isEstimate:true },
+  { id:"nvda_q1",       date:"2026-05-20", title:"엔비디아 실적 (Q1 FY2027)", shortTitle:"NVDA 실적", category:"earnings", baseScore:5, icon:"💰", time:"장 마감 후", description:"AI GPU 수요, Blackwell 공급 현황, 데이터센터 매출 성장률이 AI 테마 전체 방향을 좌우.", sectors:["반도체","AI"], isEstimate:false },
   { id:"pce_2026_05",   date:"2026-05-29", title:"PCE 물가 (4월)", shortTitle:"PCE",                category:"macro",    baseScore:3, icon:"📈", time:"08:30 ET", description:"4월 PCE 물가 발표.", sectors:["채권","성장주"], isEstimate:true },
 
   // ══ JUNE 2026 ══════════════════════════════════════════════════════════════
