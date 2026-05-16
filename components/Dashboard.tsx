@@ -1,6 +1,6 @@
 "use client";
 import { useState, useCallback, useEffect, useRef } from "react";
-import { GridLayout, LayoutItem, Layout, verticalCompactor } from "react-grid-layout";
+import { GridLayout, LayoutItem, Layout } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
 
@@ -47,6 +47,22 @@ function makeDefaultLayout(ids: string[]): LayoutItem[] {
     minW: 3,
     minH: 5,
   }));
+}
+
+// 아이템 제거 후 위로 올려 빈 공간 채우기 (verticalCompactor 대체)
+function compactUp(items: LayoutItem[]): LayoutItem[] {
+  if (!items.length) return items;
+  const sorted = [...items].sort((a, b) => a.y - b.y || a.x - b.x);
+  const result: LayoutItem[] = [];
+  for (const item of sorted) {
+    let bestY = 0;
+    for (const placed of result) {
+      const hOverlap = placed.x < item.x + item.w && placed.x + placed.w > item.x;
+      if (hOverlap) bestY = Math.max(bestY, placed.y + placed.h);
+    }
+    result.push({ ...item, y: bestY });
+  }
+  return result;
 }
 
 function nextSlot(layout: LayoutItem[]): { x: number; y: number } {
@@ -102,6 +118,7 @@ export default function Dashboard() {
             ...item,
             minW: Math.max(item.minW ?? 0, 3),
             minH: Math.max(item.minH ?? 0, 5),
+            w: Math.max(item.w, ITEM_W),
             h: Math.max(item.h, ITEM_H),
           }));
           setLayout(parsed);
@@ -187,7 +204,8 @@ export default function Dashboard() {
       ...item,
       minW: Math.max(item.minW ?? 0, 3),
       minH: Math.max(item.minH ?? 0, 5),
-      // verticalCompactor가 h를 줄이는 버그를 차단: 항상 ITEM_H(7) 이상 강제
+      // verticalCompactor가 w/h를 줄이는 버그를 차단: 초기값 이상으로 강제
+      w: Math.max(item.w, ITEM_W),
       h: Math.max(item.h, ITEM_H),
     }));
     setLayout(mutable);
@@ -221,7 +239,7 @@ export default function Dashboard() {
         setSyncDate(null);
       }
       const newIds = indicatorIds.filter((i) => i !== id);
-      const newLayout = layout.filter((l) => l.i !== id);
+      const newLayout = compactUp(layout.filter((l) => l.i !== id));
       setIndicatorIds(newIds);
       setLayout(newLayout);
       localStorage.setItem(STORAGE_IDS_KEY, JSON.stringify(newIds));
@@ -255,7 +273,7 @@ export default function Dashboard() {
     (ticker: string) => {
       const id = `stock:${ticker}`;
       const newTickers = stockTickers.filter((t) => t !== ticker);
-      const newLayout = layout.filter((l) => l.i !== id);
+      const newLayout = compactUp(layout.filter((l) => l.i !== id));
       setStockTickers(newTickers);
       setLayout(newLayout);
       localStorage.setItem(STORAGE_STOCKS_KEY, JSON.stringify(newTickers));
@@ -367,7 +385,6 @@ export default function Dashboard() {
             layout={layout}
             gridConfig={{ cols: COLS, rowHeight: ROW_HEIGHT }}
             dragConfig={{ handle: ".drag-handle" }}
-            compactor={verticalCompactor}
             width={containerWidth}
             onLayoutChange={saveLayout}
           >
