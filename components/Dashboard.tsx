@@ -94,7 +94,18 @@ export default function Dashboard() {
       if (savedIds) {
         const ids = JSON.parse(savedIds) as string[];
         setIndicatorIds(ids);
-        setLayout(savedLayout ? JSON.parse(savedLayout) : makeDefaultLayout(ids));
+        if (savedLayout) {
+          // minH/minW가 소실된 채 저장된 레이아웃을 복원할 때 최솟값 보장
+          const parsed = (JSON.parse(savedLayout) as LayoutItem[]).map((item) => ({
+            ...item,
+            minW: Math.max(item.minW ?? 0, 3),
+            minH: Math.max(item.minH ?? 0, 5),
+            h: Math.max(item.h, item.minH ?? 5),
+          }));
+          setLayout(parsed);
+        } else {
+          setLayout(makeDefaultLayout(ids));
+        }
       }
     } catch {
       // 기본값 유지
@@ -106,10 +117,19 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (!mounted) return;
-    const update = () => setContainerWidth(window.innerWidth - 48 - (anomalyMode ? PANEL_WIDTH : 0));
+    const update = () => {
+      // 탭 전환 직후 잘못된 innerWidth를 막기 위해 visibilitychange도 구독
+      if (typeof window !== "undefined") {
+        setContainerWidth(Math.max(300, window.innerWidth - 48 - (anomalyMode ? PANEL_WIDTH : 0)));
+      }
+    };
     update();
     window.addEventListener("resize", update);
-    return () => window.removeEventListener("resize", update);
+    document.addEventListener("visibilitychange", update);
+    return () => {
+      window.removeEventListener("resize", update);
+      document.removeEventListener("visibilitychange", update);
+    };
   }, [mounted, anomalyMode]);
 
   const handleSyncDate = useCallback((date: string | null) => {
@@ -158,7 +178,13 @@ export default function Dashboard() {
   }, [syncMode, indicatorIds, layout]);
 
   const saveLayout = useCallback((newLayout: Layout) => {
-    const mutable = [...newLayout] as LayoutItem[];
+    // onLayoutChange가 minH/minW를 소실시키는 것을 방지 + 비정상적으로 축소된 h 보정
+    const mutable = (newLayout as LayoutItem[]).map((item) => ({
+      ...item,
+      minW: Math.max(item.minW ?? 0, 3),
+      minH: Math.max(item.minH ?? 0, 5),
+      h: Math.max(item.h, item.minH ?? 5),
+    }));
     setLayout(mutable);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(mutable));
   }, []);
