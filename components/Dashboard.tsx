@@ -1,5 +1,5 @@
 "use client";
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { GridLayout, LayoutItem, Layout, verticalCompactor } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
@@ -75,6 +75,8 @@ export default function Dashboard() {
   const [showModal, setShowModal] = useState(false);
   const [showStockModal, setShowStockModal] = useState(false);
   const [containerWidth, setContainerWidth] = useState(1200);
+  // 마운트 직후 GridLayout이 onLayoutChange를 발사해 bad layout을 저장하는 것을 막음
+  const canSaveLayout = useRef(false);
   const [syncMode, setSyncMode] = useState(false);
   const [syncDate, setSyncDate] = useState<string | null>(null);
   const [anomalyMode, setAnomalyMode] = useState(false);
@@ -111,6 +113,9 @@ export default function Dashboard() {
       // 기본값 유지
     }
     setMounted(true);
+    // containerWidth가 실제 값으로 안정화될 시간 확보 후 저장 허용
+    const t = setTimeout(() => { canSaveLayout.current = true; }, 400);
+    return () => clearTimeout(t);
   }, []);
 
   const PANEL_WIDTH = 416;
@@ -178,7 +183,6 @@ export default function Dashboard() {
   }, [syncMode, indicatorIds, layout]);
 
   const saveLayout = useCallback((newLayout: Layout) => {
-    // onLayoutChange가 minH/minW를 소실시키는 것을 방지 + 비정상적으로 축소된 h 보정
     const mutable = (newLayout as LayoutItem[]).map((item) => ({
       ...item,
       minW: Math.max(item.minW ?? 0, 3),
@@ -186,7 +190,10 @@ export default function Dashboard() {
       h: Math.max(item.h, item.minH ?? 5),
     }));
     setLayout(mutable);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(mutable));
+    // 마운트 직후 자동 compaction 결과는 저장하지 않음 (주식 카드 쪼그라드는 버그 방지)
+    if (canSaveLayout.current) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(mutable));
+    }
   }, []);
 
   const addIndicator = useCallback(

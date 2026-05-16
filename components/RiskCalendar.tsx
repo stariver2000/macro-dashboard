@@ -1,5 +1,6 @@
 "use client";
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   EventCategory,
   CATEGORY_META,
@@ -14,7 +15,7 @@ import {
   getElectionWindow,
   ELECTION_WINDOWS,
   calculateDayRisk,
-  RISK_EVENTS,
+  STATIC_RISK_EVENTS,
 } from "@/lib/riskEvents";
 import DayRiskPanel from "./DayRiskPanel";
 import NavBar from "./NavBar";
@@ -205,8 +206,8 @@ function MonthRiskSummary({
 }
 
 // ─── Upcoming sidebar ─────────────────────────────────────────────────────────
-function UpcomingSidebar({ onSelectDate }: { onSelectDate: (d: string) => void }) {
-  const events = useMemo(() => getUpcomingEvents(60), []);
+function UpcomingSidebar({ onSelectDate, allEvents }: { onSelectDate: (d: string) => void; allEvents: RiskEvent[] }) {
+  const events = useMemo(() => getUpcomingEvents(60, allEvents), [allEvents]);
   const today = todayStr();
 
   return (
@@ -217,7 +218,7 @@ function UpcomingSidebar({ onSelectDate }: { onSelectDate: (d: string) => void }
         {events.map((ev) => {
           const meta = CATEGORY_META[ev.category];
           const daysLeft = Math.ceil((new Date(ev.date).getTime() - new Date(today).getTime()) / 86400000);
-          const result = calculateDayRisk(ev.date, getEventsByDate(ev.date), RISK_EVENTS);
+          const result = calculateDayRisk(ev.date, getEventsByDate(ev.date, allEvents), allEvents);
           return (
             <button
               key={ev.id}
@@ -339,6 +340,27 @@ export default function RiskCalendar() {
   const [holdings, setHoldings] = useState<string[]>([]);
   const todayDate = todayStr();
 
+  // Fetch events from official sources (FRED, Federal Reserve, Yahoo Finance)
+  const { data: apiData, isLoading: apiLoading } = useQuery({
+    queryKey: ["calendar-api"],
+    queryFn: async () => {
+      const res = await fetch("/api/calendar");
+      if (!res.ok) throw new Error("calendar fetch failed");
+      return res.json() as Promise<{ events: RiskEvent[] }>;
+    },
+    staleTime: 1000 * 60 * 60 * 6, // 6시간
+    retry: 1,
+  });
+
+  // Merge static confirmed events with API-fetched events (dedup by id)
+  const allEvents = useMemo<RiskEvent[]>(() => {
+    const fetched: RiskEvent[] = apiData?.events ?? [];
+    const staticIds = new Set(STATIC_RISK_EVENTS.map(e => e.id));
+    // Static events take precedence; API events only added if no conflict
+    const apiOnly = fetched.filter(e => !staticIds.has(e.id));
+    return [...STATIC_RISK_EVENTS, ...apiOnly];
+  }, [apiData]);
+
   useEffect(() => {
     try {
       const saved = localStorage.getItem(PORTFOLIO_KEY);
@@ -352,8 +374,8 @@ export default function RiskCalendar() {
   }, []);
 
   const riskMap = useMemo(
-    () => buildMonthRiskMap(viewYear, viewMonth, activeCategories),
-    [viewYear, viewMonth, activeCategories]
+    () => buildMonthRiskMap(viewYear, viewMonth, activeCategories, allEvents),
+    [viewYear, viewMonth, activeCategories, allEvents]
   );
 
   const daysInMonth = getDaysInMonth(viewYear, viewMonth);
@@ -392,8 +414,8 @@ export default function RiskCalendar() {
   const selectedEntry = selectedDate ? (() => {
     const cached = riskMap.get(selectedDate);
     if (cached) return cached;
-    const allDayEvents = getEventsByDate(selectedDate);
-    const result = calculateDayRisk(selectedDate, allDayEvents, RISK_EVENTS);
+    const allDayEvents = getEventsByDate(selectedDate, allEvents);
+    const result = calculateDayRisk(selectedDate, allDayEvents, allEvents);
     return { events: allDayEvents, result };
   })() : null;
 
@@ -478,7 +500,7 @@ export default function RiskCalendar() {
               const dateStr = toDateStr(viewYear, viewMonth, day);
               const entry = riskMap.get(dateStr);
               const events = entry?.events ?? [];
-              const result = entry?.result ?? calculateDayRisk(dateStr, [], RISK_EVENTS);
+              const result = entry?.result ?? calculateDayRisk(dateStr, [], allEvents);
               const dow = (firstDow + day - 1) % 7;
               return (
                 <CalendarCell
@@ -515,8 +537,19 @@ export default function RiskCalendar() {
 
         {/* ── Sidebar ── */}
         <div className="xl:w-72 flex-shrink-0 space-y-6">
-          <UpcomingSidebar onSelectDate={handleSelectDate} />
+          <UpcomingSidebar onSelectDate={handleSelectDate} allEvents={allEvents} />
           <PortfolioSection holdings={holdings} onChange={saveHoldings} />
+          {/* 데이터 소스 표시 */}
+          <div className="text-[11px] text-gray-600 space-y-0.5">
+            {apiLoading && <p className="text-indigo-400">📡 FRED·연준·Yahoo Finance에서 데이터 로딩 중...</p>}
+            {!apiLoading && apiData && (
+              <p className="text-green-600">✓ {apiData.events.length}개 이벤트 (FRED·연준·Yahoo Finance)</p>
+            )}
+            {!apiLoading && !apiData && (
+              <p className="text-yellow-600">⚠ 공식 데이터 불러오기 실패 — 확정 이벤트만 표시</p>
+            )}
+            <p>확정 이벤트 {STATIC_RISK_EVENTS.length}개 (옵션만기·정치·선물)</p>
+          </div>
           <Legend />
         </div>
       </div>
